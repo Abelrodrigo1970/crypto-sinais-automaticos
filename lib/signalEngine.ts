@@ -43,7 +43,7 @@ async function runRsiStrategy(
   }
 
   const period = params.period || 14;
-  const overbought = params.overbought || 70;
+  const overbought = params.overbought || 69;
   const oversold = params.oversold || 30;
 
   try {
