@@ -395,8 +395,11 @@ async function runPmoStrategy(
 ): Promise<SignalResult | null> {
   // Esta estratégia funciona apenas com timeframe 4h
   if (timeframe !== '4h') {
+    console.log(`[PMO] ⏭️ Ignorado ${symbol} - timeframe ${timeframe} (apenas 4h permitido)`);
     return null;
   }
+  
+  console.log(`[PMO] 🔍 Analisando ${symbol} no timeframe 4h`);
 
   // Verificar se o horário atual está permitido (8h, 12h, 16h, 20h, 23h)
   if (!isAllowedTime()) {
@@ -414,15 +417,20 @@ async function runPmoStrategy(
     }
 
     const closes = getCloses(candles);
-    const pmo = calculatePMO(closes, rocPeriod, fastPeriod, slowPeriod);
+    // calculatePMO retorna number | null, não objeto
+    // Parâmetros: closes, period (ROC), smoothPeriod (EMA)
+    const pmo = calculatePMO(closes, rocPeriod, slowPeriod);
 
     if (pmo === null) {
       return null;
     }
 
+    // Log para debug: verificar timeframe e valores
+    console.log(`[PMO] ${symbol} ${timeframe} - PMO atual: ${pmo.toFixed(4)}, candles: ${candles.length}`);
+
     // Calcula PMO anterior para detectar cruzamento de zero
     const prevCloses = closes.slice(0, -1);
-    const prevPmo = calculatePMO(prevCloses, rocPeriod, fastPeriod, slowPeriod);
+    const prevPmo = calculatePMO(prevCloses, rocPeriod, slowPeriod);
 
     if (prevPmo === null) {
       return null;
@@ -430,15 +438,19 @@ async function runPmoStrategy(
 
     const currentPrice = candles[candles.length - 1].close;
 
+    // Log valores para debug
+    console.log(`[PMO] ${symbol} ${timeframe} - PMO anterior: ${prevPmo.toFixed(4)}, PMO atual: ${pmo.toFixed(4)}`);
+
     // Sinal de COMPRA: PMO cruza acima de zero (de negativo para positivo)
-    if (prevPmo.pmo < 0 && pmo.pmo > 0) {
+    if (prevPmo < 0 && pmo > 0) {
+      console.log(`[PMO] ✅ SINAL COMPRA gerado para ${symbol} ${timeframe} - PMO: ${prevPmo.toFixed(4)} → ${pmo.toFixed(4)}`);
       const stopLoss = currentPrice * 0.96; // 4% abaixo
       const target1 = currentPrice * 1.20; // 20% acima
       const target2 = currentPrice * 1.20;
       const target3 = currentPrice * 1.20;
 
       // Força baseada no valor absoluto do PMO
-      const strength = Math.min(100, Math.max(60, Math.round(Math.abs(pmo.pmo) * 10)));
+      const strength = Math.min(100, Math.max(60, Math.round(Math.abs(pmo) * 10)));
 
       return {
         direction: 'BUY',
@@ -449,8 +461,8 @@ async function runPmoStrategy(
         target3,
         strength,
         extraInfo: JSON.stringify({
-          pmo: pmo.pmo.toFixed(4),
-          prevPmo: prevPmo.pmo.toFixed(4),
+          pmo: pmo.toFixed(4),
+          prevPmo: prevPmo.toFixed(4),
           rocPeriod,
           fastPeriod,
           slowPeriod,
@@ -459,13 +471,14 @@ async function runPmoStrategy(
     }
 
     // Sinal de VENDA: PMO cruza abaixo de zero (de positivo para negativo)
-    if (prevPmo.pmo > 0 && pmo.pmo < 0) {
+    if (prevPmo > 0 && pmo < 0) {
+      console.log(`[PMO] ✅ SINAL VENDA gerado para ${symbol} ${timeframe} - PMO: ${prevPmo.toFixed(4)} → ${pmo.toFixed(4)}`);
       const stopLoss = currentPrice * 1.04; // 4% acima
       const target1 = currentPrice * 0.80; // 20% abaixo
       const target2 = currentPrice * 0.80;
       const target3 = currentPrice * 0.80;
 
-      const strength = Math.min(100, Math.max(60, Math.round(Math.abs(pmo.pmo) * 10)));
+      const strength = Math.min(100, Math.max(60, Math.round(Math.abs(pmo) * 10)));
 
       return {
         direction: 'SELL',
@@ -476,8 +489,8 @@ async function runPmoStrategy(
         target3,
         strength,
         extraInfo: JSON.stringify({
-          pmo: pmo.pmo.toFixed(4),
-          prevPmo: prevPmo.pmo.toFixed(4),
+          pmo: pmo.toFixed(4),
+          prevPmo: prevPmo.toFixed(4),
           rocPeriod,
           fastPeriod,
           slowPeriod,
@@ -541,7 +554,8 @@ async function runMacdHistogramPmoStrategy(
     }
 
     // Calcular PMO
-    const pmo = calculatePMO(closes, rocPeriod, fastPeriodPmo, slowPeriodPmo);
+    // calculatePMO retorna number | null, parâmetros: closes, period (ROC), smoothPeriod (EMA)
+    const pmo = calculatePMO(closes, rocPeriod, slowPeriodPmo);
     if (pmo === null) {
       return null;
     }
@@ -549,7 +563,7 @@ async function runMacdHistogramPmoStrategy(
     const currentPrice = candles[candles.length - 1].close;
 
     // Sinal de COMPRA: Histograma cruza para cima (de negativo para positivo) E PMO > -0.5
-    if (prevMacd.histogram < 0 && macd.histogram > 0 && pmo.pmo > pmoBuyThreshold) {
+    if (prevMacd.histogram < 0 && macd.histogram > 0 && pmo > pmoBuyThreshold) {
       const stopLoss = currentPrice * 0.96; // 4% abaixo
       const target1 = currentPrice * 1.20; // 20% acima
       const target2 = currentPrice * 1.20;
@@ -557,7 +571,7 @@ async function runMacdHistogramPmoStrategy(
 
       // Força baseada no histograma e PMO
       const histogramStrength = Math.min(50, Math.round(Math.abs(macd.histogram) * 1000));
-      const pmoStrength = Math.min(50, Math.round((pmo.pmo - pmoBuyThreshold) * 20));
+      const pmoStrength = Math.min(50, Math.round((pmo - pmoBuyThreshold) * 20));
       const strength = Math.min(100, Math.max(60, histogramStrength + pmoStrength));
 
       return {
@@ -573,14 +587,14 @@ async function runMacdHistogramPmoStrategy(
           signal: macd.signal.toFixed(4),
           histogram: macd.histogram.toFixed(4),
           prevHistogram: prevMacd.histogram.toFixed(4),
-          pmo: pmo.pmo.toFixed(4),
+          pmo: pmo.toFixed(4),
           pmoBuyThreshold,
         }),
       };
     }
 
     // Sinal de VENDA: Histograma cruza para baixo (de positivo para negativo) E PMO < 0.5
-    if (prevMacd.histogram > 0 && macd.histogram < 0 && pmo.pmo < pmoSellThreshold) {
+    if (prevMacd.histogram > 0 && macd.histogram < 0 && pmo < pmoSellThreshold) {
       const stopLoss = currentPrice * 1.04; // 4% acima
       const target1 = currentPrice * 0.80; // 20% abaixo
       const target2 = currentPrice * 0.80;
@@ -588,7 +602,7 @@ async function runMacdHistogramPmoStrategy(
 
       // Força baseada no histograma e PMO
       const histogramStrength = Math.min(50, Math.round(Math.abs(macd.histogram) * 1000));
-      const pmoStrength = Math.min(50, Math.round((pmoSellThreshold - pmo.pmo) * 20));
+      const pmoStrength = Math.min(50, Math.round((pmoSellThreshold - pmo) * 20));
       const strength = Math.min(100, Math.max(60, histogramStrength + pmoStrength));
 
       return {
@@ -604,7 +618,7 @@ async function runMacdHistogramPmoStrategy(
           signal: macd.signal.toFixed(4),
           histogram: macd.histogram.toFixed(4),
           prevHistogram: prevMacd.histogram.toFixed(4),
-          pmo: pmo.pmo.toFixed(4),
+          pmo: pmo.toFixed(4),
           pmoSellThreshold,
         }),
       };
