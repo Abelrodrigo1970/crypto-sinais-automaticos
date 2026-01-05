@@ -406,20 +406,20 @@ async function runPmoStrategy(
     return null;
   }
 
-  const rocPeriod = params.rocPeriod || 10;
-  const fastPeriod = params.fastPeriod || 5;
-  const slowPeriod = params.slowPeriod || 35;
+  // Parâmetros TradingView: length1=35, length2=20, signal=10
+  const rocPeriod = params.rocPeriod || 35;      // length1 (ROC period)
+  const emaFast = params.emaFast || 20;          // length2 (primeira EMA)
+  const emaSlow = params.emaSlow || 10;          // signal length (segunda EMA)
 
   try {
-    const candles = await fetchCandles(symbol, timeframe, rocPeriod + slowPeriod + 20);
-    if (candles.length < rocPeriod + slowPeriod + 2) {
+    const candles = await fetchCandles(symbol, timeframe, rocPeriod + emaFast + emaSlow + 20);
+    if (candles.length < rocPeriod + emaFast + emaSlow + 2) {
       return null;
     }
 
     const closes = getCloses(candles);
-    // calculatePMO retorna number | null, não objeto
-    // Parâmetros: closes, period (ROC), smoothPeriod (EMA)
-    const pmo = calculatePMO(closes, rocPeriod, slowPeriod);
+    // calculatePMO: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
+    const pmo = calculatePMO(closes, rocPeriod, emaFast, emaSlow);
 
     if (pmo === null) {
       return null;
@@ -430,7 +430,7 @@ async function runPmoStrategy(
 
     // Calcula PMO anterior para detectar cruzamento de zero
     const prevCloses = closes.slice(0, -1);
-    const prevPmo = calculatePMO(prevCloses, rocPeriod, slowPeriod);
+    const prevPmo = calculatePMO(prevCloses, rocPeriod, emaFast, emaSlow);
 
     if (prevPmo === null) {
       return null;
@@ -464,8 +464,9 @@ async function runPmoStrategy(
           pmo: pmo.toFixed(4),
           prevPmo: prevPmo.toFixed(4),
           rocPeriod,
-          fastPeriod,
-          slowPeriod,
+          emaFast,
+          emaSlow,
+          timeframe: '4h',
         }),
       };
     }
@@ -492,8 +493,9 @@ async function runPmoStrategy(
           pmo: pmo.toFixed(4),
           prevPmo: prevPmo.toFixed(4),
           rocPeriod,
-          fastPeriod,
-          slowPeriod,
+          emaFast,
+          emaSlow,
+          timeframe: '4h',
         }),
       };
     }
@@ -523,15 +525,17 @@ async function runMacdHistogramPmoStrategy(
   const fastPeriod = params.fastPeriod || 12;
   const slowPeriod = params.slowPeriod || 26;
   const signalPeriod = params.signalPeriod || 9;
-  const rocPeriod = params.rocPeriod || 10;
-  const fastPeriodPmo = params.fastPeriodPmo || 5;
-  const slowPeriodPmo = params.slowPeriodPmo || 35;
   const pmoBuyThreshold = params.pmoBuyThreshold || -0.5;
   const pmoSellThreshold = params.pmoSellThreshold || 0.5;
+  
+  // Parâmetros PMO TradingView: length1=35, length2=20, signal=10
+  const pmoRocPeriod = params.rocPeriodPmo || 35;
+  const pmoEmaFast = params.emaFastPmo || 20;
+  const pmoEmaSlow = params.emaSlowPmo || 10;
 
   try {
     // Buscar candles suficientes para MACD e PMO
-    const maxPeriod = Math.max(slowPeriod + signalPeriod, rocPeriod + slowPeriodPmo) + 20;
+    const maxPeriod = Math.max(slowPeriod + signalPeriod, pmoRocPeriod + pmoEmaFast + pmoEmaSlow) + 20;
     const candles = await fetchCandles(symbol, timeframe, maxPeriod);
     
     if (candles.length < maxPeriod) {
@@ -553,9 +557,9 @@ async function runMacdHistogramPmoStrategy(
       return null;
     }
 
-    // Calcular PMO
-    // calculatePMO retorna number | null, parâmetros: closes, period (ROC), smoothPeriod (EMA)
-    const pmo = calculatePMO(closes, rocPeriod, slowPeriodPmo);
+    // Calcular PMO com parâmetros TradingView
+    // calculatePMO: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
+    const pmo = calculatePMO(closes, pmoRocPeriod, pmoEmaFast, pmoEmaSlow);
     if (pmo === null) {
       return null;
     }

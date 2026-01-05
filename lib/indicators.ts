@@ -3,7 +3,7 @@
  * Usa a biblioteca technicalindicators
  */
 
-import { RSI, SMA, MACD, EMA, ATR } from 'technicalindicators';
+import { RSI, SMA, MACD, EMA, ATR, BollingerBands } from 'technicalindicators';
 import type { Candle } from './marketData';
 
 /**
@@ -45,7 +45,7 @@ export function calculateMACD(
   closes: number[],
   fastPeriod: number = 12,
   slowPeriod: number = 26,
-  signalPeriod: number = 9
+  signalPeriod: number = 7
 ): { macd: number; signal: number; histogram: number } | null {
   if (closes.length < slowPeriod + signalPeriod) {
     return null;
@@ -112,16 +112,7 @@ export function calculateEMA(values: number[], period: number): number[] | null 
 }
 
 /**
- * Calcula ATR (Average True Range)
- */
-export function calculateATR(
-  candles: Candle[],
-  period: number = 14
-): number | null {
-  if (candles.length < period + 1) {
-    return null;
-  }
-
+ * Calcula ATR (Average True Rang
   const high = candles.map((c) => c.high);
   const low = candles.map((c) => c.low);
   const close = candles.map((c) => c.close);
@@ -160,11 +151,66 @@ export function getVolumes(candles: Candle[]): number[] {
 }
 
 /**
+ * Calcula PMO (Price Momentum Oscillator)
+ * PMO = EMA(ROC(period), smoothPeriod) * 10
+ */
+/**
+ * Calcula PMO (Price Momentum Oscillator) conforme TradingView
+ * TradingView padrão: length1=35, length2=20, signal=10
+ * Fórmula: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
+ */
+export function calculatePMO(
+  closes: number[],
+  rocPeriod: number = 35,
+  emaFast: number = 20,
+  emaSlow: number = 10
+): number | null {
+  // Precisa de candles suficientes: ROC period + EMA fast + EMA slow
+  if (closes.length < rocPeriod + emaFast + emaSlow) {
+    return null;
+  }
+
+  // 1. Calcular ROC (Rate of Change) com período length1 (35)
+  const roc: number[] = [];
+  for (let i = rocPeriod; i < closes.length; i++) {
+    const change = ((closes[i] - closes[i - rocPeriod]) / closes[i - rocPeriod]) * 100;
+    roc.push(change);
+  }
+
+  if (roc.length < emaFast) {
+    return null;
+  }
+
+  // 2. Aplicar primeira EMA (length2 = 20) no ROC
+  const emaFastValues = EMA.calculate({
+    values: roc,
+    period: emaFast,
+  });
+
+  if (emaFastValues.length < emaSlow) {
+    return null;
+  }
+
+  // 3. Aplicar segunda EMA (signal length = 10) no resultado da primeira EMA
+  const emaSlowValues = EMA.calculate({
+    values: emaFastValues,
+    period: emaSlow,
+  });
+
+  if (emaSlowValues.length === 0) {
+    return null;
+  }
+
+  // 4. PMO = (EMA20 - EMA10) × 10
+  const lastFast = emaFastValues[emaFastValues.length - 1];
+  const lastSlow = emaSlowValues[emaSlowValues.length - 1];
+  const pmo = (lastFast - lastSlow) * 10;
+
+  return pmo;
+}
+
+/**
  * Calcula Bollinger Bands
- * @param closes Array de preços de fechamento
- * @param period Período para SMA (padrão: 20)
- * @param stdDev Desvio padrão (padrão: 2)
- * @returns { upper, middle, lower } ou null se dados insuficientes
  */
 export function calculateBollingerBands(
   closes: number[],
@@ -175,128 +221,55 @@ export function calculateBollingerBands(
     return null;
   }
 
-  // Calcular SMA (middle band)
-  const smaValues = SMA.calculate({
+  const bbValues = BollingerBands.calculate({
     values: closes,
     period: period,
+    stdDev: stdDev,
   });
 
-  if (smaValues.length === 0) {
+  if (bbValues.length === 0) {
     return null;
   }
 
-  const middle = smaValues[smaValues.length - 1];
-  const recentCloses = closes.slice(-period);
-
-  // Calcular desvio padrão
-  const mean = middle;
-  const variance =
-    recentCloses.reduce((sum, price) => sum + Math.pow(price - mean, 2), 0) /
-    period;
-  const standardDeviation = Math.sqrt(variance);
-
-  const upper = middle + stdDev * standardDeviation;
-  const lower = middle - stdDev * standardDeviation;
-
-  return { upper, middle, lower };
+  const last = bbValues[bbValues.length - 1];
+  return {
+    upper: last.upper || 0,
+    middle: last.middle || 0,
+    lower: last.lower || 0,
+  };
 }
 
 /**
- * Calcula Donchian Channel (High e Low de um período)
- * @param candles Array de candles
- * @param period Período (padrão: 20)
- * @returns { high, low } ou null se dados insuficientes
+ * Calcula Donchian Channel (usando highest high e lowest low)
+ * Retorna upper/lower (padrão) e também high/low (compatibilidade)
  */
-export function calculateDonchian(
+export function calculateDonchianAt(
   candles: Candle[],
-  period: number = 20
-): { high: number; low: number } | null {
+  period: number = 20,
+  index: number = -1
+): { upper: number; middle: number; lower: number; high: number; low: number } | null {
   if (candles.length < period) {
     return null;
   }
 
-  const recent = candles.slice(-period);
-  const high = Math.max(...recent.map((c) => c.high));
-  const low = Math.min(...recent.map((c) => c.low));
+  // Se index é negativo, usa o último período
+  const startIdx = index < 0 ? Math.max(0, candles.length + index - period + 1) : index;
+  const endIdx = startIdx + period;
 
-  return { high, low };
+  if (endIdx > candles.length) {
+    return null;
+  }
+
+  const slice = candles.slice(startIdx, endIdx);
+  const upper = getHighestHigh(slice, period);
+  const lower = getLowestLow(slice, period);
+  const middle = (upper + lower) / 2;
+
+  return { 
+    upper, 
+    middle, 
+    lower,
+    high: upper,  // Alias para compatibilidade
+    low: lower    // Alias para compatibilidade
+  };
 }
-
-/**
- * Calcula Donchian usando índice i-1 (sem lookahead)
- * @param candles Array de candles até o índice i
- * @param period Período
- * @param index Índice atual (usa dados até index-1)
- * @returns { high, low } ou null se dados insuficientes
- */
-export function calculateDonchianAt(
-  candles: Candle[],
-  period: number,
-  index: number
-): { high: number; low: number } | null {
-  if (index < period || index > candles.length) {
-    return null;
-  }
-
-  // Usa candles de [index - period] até [index - 1] (sem incluir index)
-  const start = Math.max(0, index - period);
-  const end = index;
-  const slice = candles.slice(start, end);
-
-  if (slice.length < period) {
-    return null;
-  }
-
-  const high = Math.max(...slice.map((c) => c.high));
-  const low = Math.min(...slice.map((c) => c.low));
-
-  return { high, low };
-}
-
-/**
- * Calcula PMO (Price Momentum Oscillator)
- * PMO = EMA(ROC, fastPeriod) onde ROC = Rate of Change
- * @param closes Array de preços de fechamento
- * @param rocPeriod Período para ROC (padrão: 10)
- * @param fastPeriod Período para EMA rápida do ROC (padrão: 5)
- * @param slowPeriod Período para EMA lenta do ROC (padrão: 35) - não usado no cálculo básico, mas mantido para compatibilidade
- * @returns { pmo: number } ou null se dados insuficientes
- */
-export function calculatePMO(
-  closes: number[],
-  rocPeriod: number = 10,
-  fastPeriod: number = 5,
-  slowPeriod: number = 35
-): { pmo: number } | null {
-  // Precisa de pelo menos rocPeriod + fastPeriod candles
-  if (closes.length < rocPeriod + fastPeriod + 1) {
-    return null;
-  }
-
-  // Calcular ROC (Rate of Change)
-  const roc: number[] = [];
-  for (let i = rocPeriod; i < closes.length; i++) {
-    const rocValue = ((closes[i] - closes[i - rocPeriod]) / closes[i - rocPeriod]) * 100;
-    roc.push(rocValue);
-  }
-
-  if (roc.length < fastPeriod) {
-    return null;
-  }
-
-  // Calcular PMO = EMA(ROC, fastPeriod)
-  const emaValues = EMA.calculate({
-    values: roc,
-    period: fastPeriod,
-  });
-
-  if (emaValues.length === 0) {
-    return null;
-  }
-
-  const pmo = emaValues[emaValues.length - 1];
-
-  return { pmo };
-}
-
-
