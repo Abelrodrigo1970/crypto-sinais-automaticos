@@ -112,7 +112,13 @@ export function calculateEMA(values: number[], period: number): number[] | null 
 }
 
 /**
- * Calcula ATR (Average True Rang
+ * Calcula ATR (Average True Range)
+ */
+export function calculateATR(candles: Candle[], period: number = 13): number | null {
+  if (candles.length < period + 1) {
+    return null;
+  }
+
   const high = candles.map((c) => c.high);
   const low = candles.map((c) => c.low);
   const close = candles.map((c) => c.close);
