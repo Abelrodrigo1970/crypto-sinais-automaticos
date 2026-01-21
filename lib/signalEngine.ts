@@ -168,14 +168,14 @@ async function runMacdHistogramPmoStrategy(
   const pmoBuyThreshold = params.pmoBuyThreshold || -0.5;
   const pmoSellThreshold = params.pmoSellThreshold || 0.5;
   
-  // Parâmetros PMO TradingView: length1=35, length2=20, signal=10
-  const pmoRocPeriod = params.rocPeriodPmo || 35;
-  const pmoEmaFast = params.emaFastPmo || 20;
-  const pmoEmaSlow = params.emaSlowPmo || 10;
+  // Parâmetros PMO TradingView: firstLength=35, secondLength=20
+  // Fórmula: pmo = ema(10 * ema(roc(src, 1), 35), 20)
+  const pmoFirstLength = params.rocPeriodPmo || 35;  // firstLength (1st Smoothing Length)
+  const pmoSecondLength = params.emaFastPmo || 20;  // secondLength (2nd Smoothing Length)
 
   try {
     // Buscar candles suficientes para MACD e PMO
-    const maxPeriod = Math.max(slowPeriod + signalPeriod, pmoRocPeriod + pmoEmaFast + pmoEmaSlow) + 20;
+    const maxPeriod = Math.max(slowPeriod + signalPeriod, pmoFirstLength + pmoSecondLength) + 20;
     const candles = await fetchCandles(symbol, timeframe, maxPeriod);
     
     if (candles.length < maxPeriod) {
@@ -198,8 +198,8 @@ async function runMacdHistogramPmoStrategy(
     }
 
     // Calcular PMO com parâmetros TradingView
-    // calculatePMO: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
-    const pmo = calculatePMO(closes, pmoRocPeriod, pmoEmaFast, pmoEmaSlow);
+    // Fórmula: ROC(1) → EMA(35) → ×10 → EMA(20) → PMO
+    const pmo = calculatePMO(closes, pmoFirstLength, pmoSecondLength);
     if (pmo === null) {
       return null;
     }
