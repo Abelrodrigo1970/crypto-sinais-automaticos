@@ -10,7 +10,6 @@ import {
   calculatePMO,
   getCloses,
 } from './indicators';
-import { createEntrySignals } from './multiTimeframeStrategy';
 
 export interface SignalResult {
   direction: 'BUY' | 'SELL';
@@ -388,86 +387,6 @@ async function runMa60CrossoverStrategy(
 }
 
 /**
- * Estratégia Multi-Timeframe (4H + 1H): Análise multi-timeframe com filtros de regime e bias
- */
-async function runMultiTimeframeStrategy(
-  symbol: string,
-  timeframe: Timeframe,
-  params: StrategyParams
-): Promise<SignalResult | null> {
-  // Esta estratégia funciona apenas com timeframe 1H
-  if (timeframe !== '1h') {
-    return null;
-  }
-
-  try {
-    // Buscar candles 1H e 4H (precisamos de bastante histórico)
-    const candles1H = await fetchCandles(symbol, '1h', 200);
-    const candles4H = await fetchCandles(symbol, '4h', 100);
-
-    if (candles1H.length < 100 || candles4H.length < 60) {
-      return null;
-    }
-
-    // Criar evaluator
-    const { evaluate } = createEntrySignals(candles1H, candles4H);
-
-    // Avaliar o último candle 1H
-    const i1H = candles1H.length - 1;
-    const signal = evaluate(i1H);
-
-    if (signal.type === 'NONE') {
-      return null;
-    }
-
-    const currentPrice = candles1H[i1H].close;
-    const direction = signal.type === 'LONG' ? 'BUY' : 'SELL';
-
-    // Calcular stop loss e targets (4% stop, 20% target)
-    const stopLoss = direction === 'BUY' 
-      ? currentPrice * 0.96  // 4% abaixo para LONG
-      : currentPrice * 1.04; // 4% acima para SHORT
-
-    const target1 = direction === 'BUY'
-      ? currentPrice * 1.20  // 20% acima para LONG
-      : currentPrice * 0.80; // 20% abaixo para SHORT
-
-    // Força baseada no regime e bias
-    let strength = 50;
-    if (signal.regime4H === 'TREND') {
-      strength += 20;
-    }
-    if (signal.bias4H === 'BULL' || signal.bias4H === 'BEAR') {
-      strength += 20;
-    }
-    if (signal.type === 'LONG' && signal.bias4H === 'BULL') {
-      strength += 10;
-    }
-    if (signal.type === 'SHORT' && signal.bias4H === 'BEAR') {
-      strength += 10;
-    }
-
-    return {
-      direction,
-      entryPrice: currentPrice,
-      stopLoss,
-      target1,
-      target2: target1,
-      target3: target1,
-      strength: Math.min(100, strength),
-      extraInfo: JSON.stringify({
-        reason: signal.reason,
-        regime4H: signal.regime4H,
-        bias4H: signal.bias4H,
-      }),
-    };
-  } catch (error) {
-    console.error(`Erro na estratégia Multi-Timeframe para ${symbol}:`, error);
-    return null;
-  }
-}
-
-/**
  * Busca símbolos da Binance com market cap superior a 70 milhões
  * Usa CoinGecko API para obter market cap real
  */
@@ -597,9 +516,6 @@ export async function runAllStrategies(): Promise<number> {
                 break;
               case 'MA60_CROSSOVER':
                 signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
-                break;
-              case 'MULTI_TIMEFRAME':
-                signalResult = await runMultiTimeframeStrategy(symbol, timeframe, params);
                 break;
               default:
                 console.warn(`Estratégia desconhecida: ${strategy.name}`);
