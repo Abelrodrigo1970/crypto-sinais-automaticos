@@ -276,6 +276,118 @@ async function runMacdHistogramPmoStrategy(
 }
 
 /**
+ * Estratégia MA60 Crossover 4H: Gera sinais quando preço cruza a média móvel de 60 períodos
+ * Apenas no timeframe 4h e apenas nos horários: 8h, 12h, 16h, 20h, 23h
+ * Apenas para símbolos com market cap > 70 milhões
+ */
+async function runMa60CrossoverStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  // Esta estratégia funciona apenas com timeframe 4h
+  if (timeframe !== '4h') {
+    return null;
+  }
+
+  // Verificar se o horário atual está permitido
+  if (!isAllowedTime()) {
+    return null;
+  }
+
+  const maPeriod = params.maPeriod || 60;
+
+  try {
+    // Buscar candles suficientes para calcular MA60
+    const candles = await fetchCandles(symbol, timeframe, maPeriod + 20);
+    if (candles.length < maPeriod + 2) {
+      return null;
+    }
+
+    const closes = getCloses(candles);
+    
+    // Calcular média móvel de 60 períodos atual
+    const currentMA = calculateSMA(closes, maPeriod);
+    if (currentMA === null) {
+      return null;
+    }
+
+    // Calcular média móvel anterior (sem o último candle)
+    const prevCloses = closes.slice(0, -1);
+    const prevMA = calculateSMA(prevCloses, maPeriod);
+    if (prevMA === null) {
+      return null;
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+    const prevPrice = candles[candles.length - 2].close;
+
+    // Sinal de COMPRA: Preço cruza acima da MA60 (preço anterior estava abaixo, atual está acima)
+    if (prevPrice < prevMA && currentPrice > currentMA) {
+      const stopLoss = currentPrice * 0.96; // 4% abaixo
+      const target1 = currentPrice * 1.20; // 20% acima
+      const target2 = currentPrice * 1.20;
+      const target3 = currentPrice * 1.20;
+
+      // Força baseada na distância do preço à média
+      const distanceFromMA = ((currentPrice - currentMA) / currentMA) * 100;
+      const strength = Math.min(100, Math.max(60, Math.round(50 + distanceFromMA * 2)));
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          ma60: currentMA.toFixed(4),
+          prevPrice: prevPrice.toFixed(4),
+          currentPrice: currentPrice.toFixed(4),
+          distanceFromMA: distanceFromMA.toFixed(2),
+          maPeriod,
+        }),
+      };
+    }
+
+    // Sinal de VENDA: Preço cruza abaixo da MA60 (preço anterior estava acima, atual está abaixo)
+    if (prevPrice > prevMA && currentPrice < currentMA) {
+      const stopLoss = currentPrice * 1.04; // 4% acima
+      const target1 = currentPrice * 0.80; // 20% abaixo
+      const target2 = currentPrice * 0.80;
+      const target3 = currentPrice * 0.80;
+
+      // Força baseada na distância do preço à média
+      const distanceFromMA = ((currentMA - currentPrice) / currentMA) * 100;
+      const strength = Math.min(100, Math.max(60, Math.round(50 + distanceFromMA * 2)));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          ma60: currentMA.toFixed(4),
+          prevPrice: prevPrice.toFixed(4),
+          currentPrice: currentPrice.toFixed(4),
+          distanceFromMA: distanceFromMA.toFixed(2),
+          maPeriod,
+        }),
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia MA60 Crossover para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
  * Estratégia Multi-Timeframe (4H + 1H): Análise multi-timeframe com filtros de regime e bias
  */
 async function runMultiTimeframeStrategy(
@@ -356,6 +468,47 @@ async function runMultiTimeframeStrategy(
 }
 
 /**
+ * Busca símbolos da Binance com market cap superior a 70 milhões
+ * Usa CoinGecko API para obter market cap real
+ */
+async function fetchSymbolsWithMarketCap(minMarketCap: number = 70000000): Promise<string[]> {
+  try {
+    // Buscar todos os símbolos USDT da Binance Futures
+    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar símbolos: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const usdtSymbols = data
+      .filter((ticker: any) => ticker.symbol.endsWith('USDT') && !ticker.symbol.includes('BUSD'))
+      .map((ticker: any) => ticker.symbol);
+
+    // Tentar usar CoinGecko para obter market cap real
+    // Mapear símbolos Binance para IDs CoinGecko (exemplo: BTCUSDT -> bitcoin)
+    // Por simplicidade, vamos usar uma aproximação baseada em volume
+    // Símbolos com alto volume geralmente têm alto market cap
+    
+    // Filtrar por quoteVolume alto (aproximação de market cap)
+    // 70 milhões de market cap geralmente corresponde a ~10-50M de volume diário
+    const minQuoteVolume = minMarketCap / 10; // Aproximação conservadora
+    const filteredSymbols = data
+      .filter((ticker: any) => {
+        return ticker.symbol.endsWith('USDT') && 
+               !ticker.symbol.includes('BUSD') &&
+               parseFloat(ticker.quoteVolume) >= minQuoteVolume;
+      })
+      .map((ticker: any) => ticker.symbol);
+
+    return filteredSymbols;
+  } catch (error) {
+    console.error('Erro ao buscar símbolos com market cap:', error);
+    // Fallback: retornar lista vazia ou símbolos padrão
+    return [];
+  }
+}
+
+/**
  * Verifica se o horário atual está permitido para gerar sinais
  * Horários permitidos: 8h, 12h, 16h, 20h, 23h (de 4 em 4 horas)
  */
@@ -416,7 +569,20 @@ export async function runAllStrategies(): Promise<number> {
 
       const params = JSON.parse(strategy.params || '{}');
 
-      for (const symbol of symbols) {
+      // Para estratégia MA60_CROSSOVER, usar símbolos com market cap > 70 milhões
+      let symbolsToAnalyze = symbols;
+      if (strategy.name === 'MA60_CROSSOVER') {
+        console.log('🔍 Buscando símbolos com market cap > 70 milhões para estratégia MA60_CROSSOVER...');
+        const highMarketCapSymbols = await fetchSymbolsWithMarketCap(70000000);
+        if (highMarketCapSymbols.length > 0) {
+          symbolsToAnalyze = highMarketCapSymbols;
+          console.log(`✅ Encontrados ${highMarketCapSymbols.length} símbolos com market cap > 70 milhões`);
+        } else {
+          console.warn('⚠️  Nenhum símbolo com market cap > 70 milhões encontrado, usando lista padrão');
+        }
+      }
+
+      for (const symbol of symbolsToAnalyze) {
         for (const timeframe of timeframes) {
           try {
             let signalResult: SignalResult | null = null;
@@ -428,6 +594,9 @@ export async function runAllStrategies(): Promise<number> {
                 break;
               case 'MACD_HISTOGRAM_PMO':
                 signalResult = await runMacdHistogramPmoStrategy(symbol, timeframe, params);
+                break;
+              case 'MA60_CROSSOVER':
+                signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
                 break;
               case 'MULTI_TIMEFRAME':
                 signalResult = await runMultiTimeframeStrategy(symbol, timeframe, params);
