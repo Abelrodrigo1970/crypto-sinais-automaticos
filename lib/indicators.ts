@@ -157,60 +157,85 @@ export function getVolumes(candles: Candle[]): number[] {
 }
 
 /**
- * Calcula PMO (Price Momentum Oscillator)
- * PMO = EMA(ROC(period), smoothPeriod) * 10
- */
-/**
  * Calcula PMO (Price Momentum Oscillator) conforme TradingView
- * TradingView padrão: length1=35, length2=20, signal=10
- * Fórmula: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
+ * 
+ * Código Pine Script TradingView:
+ * pmo = ema(10 * ema(nz(roc(src, 1)), firstLength), secondLength)
+ * 
+ * Fórmula correta:
+ * 1. ROC(src, 1) - ROC de 1 período (não 35!)
+ * 2. EMA(firstLength=35) no ROC de 1 período
+ * 3. Multiplica por 10
+ * 4. EMA(secondLength=20) no resultado multiplicado
+ * 5. PMO = resultado final
+ * 
+ * Parâmetros padrão: firstLength=35, secondLength=20, signalLength=10
  */
 export function calculatePMO(
   closes: number[],
-  rocPeriod: number = 35,
-  emaFast: number = 20,
-  emaSlow: number = 10
+  firstLength: number = 35,
+  secondLength: number = 20
 ): number | null {
-  // Precisa de candles suficientes: ROC period + EMA fast + EMA slow
-  if (closes.length < rocPeriod + emaFast + emaSlow) {
+  // Precisa de candles suficientes: pelo menos firstLength + secondLength
+  if (closes.length < firstLength + secondLength + 10) {
     return null;
   }
 
-  // 1. Calcular ROC (Rate of Change) com período length1 (35)
-  const roc: number[] = [];
-  for (let i = rocPeriod; i < closes.length; i++) {
-    const change = ((closes[i] - closes[i - rocPeriod]) / closes[i - rocPeriod]) * 100;
-    roc.push(change);
+  // 1. Calcular ROC de 1 período (não firstLength!)
+  const roc1: number[] = [];
+  for (let i = 1; i < closes.length; i++) {
+    const change = ((closes[i] - closes[i - 1]) / closes[i - 1]) * 100;
+    // nz() substitui NaN por 0 (conforme Pine Script)
+    roc1.push(isNaN(change) ? 0 : change);
   }
 
-  if (roc.length < emaFast) {
+  if (roc1.length < firstLength) {
     return null;
   }
 
-  // 2. Aplicar primeira EMA (length2 = 20) no ROC
-  const emaFastValues = EMA.calculate({
-    values: roc,
-    period: emaFast,
-  });
+   // 2. 1ª suavização custom: EMA com alpha = 2/length1 (TradingView/DecisionPoint usa 2/length, não 2/(length+1))
+   const alpha1 = 2 / firstLength;
+   const ema1: number[] = [];
+   let prev1: number | null = null;
+   
+   for (let i = 0; i < roc1.length; i++) {
+     const x = roc1[i];
+     if (prev1 == null) {
+       prev1 = x; // seed (igual ao primeiro valor disponível)
+     } else {
+       prev1 = alpha1 * x + (1 - alpha1) * prev1;
+     }
+     ema1.push(prev1);
+   }
 
-  if (emaFastValues.length < emaSlow) {
+  if (ema1.length < secondLength) {
     return null;
   }
 
-  // 3. Aplicar segunda EMA (signal length = 10) no resultado da primeira EMA
-  const emaSlowValues = EMA.calculate({
-    values: emaFastValues,
-    period: emaSlow,
-  });
+  // 3. Multiplicar por 10
+  const multiplied = ema1.map(v => v * 10);
 
-  if (emaSlowValues.length === 0) {
+    // 4. 2ª suavização custom: EMA com alpha = 2/length2 (TradingView/DecisionPoint usa 2/length, não 2/(length+1))
+    const alpha2 = 2 / secondLength;
+    const ema2: number[] = [];
+    let prev2: number | null = null;
+    
+    for (let i = 0; i < multiplied.length; i++) {
+      const x = multiplied[i];
+      if (prev2 == null) {
+        prev2 = x; // seed (igual ao primeiro valor disponível)
+      } else {
+        prev2 = alpha2 * x + (1 - alpha2) * prev2;
+      }
+      ema2.push(prev2);
+    }
+
+  if (ema2.length === 0) {
     return null;
   }
 
-  // 4. PMO = (EMA20 - EMA10) × 10
-  const lastFast = emaFastValues[emaFastValues.length - 1];
-  const lastSlow = emaSlowValues[emaSlowValues.length - 1];
-  const pmo = (lastFast - lastSlow) * 10;
+  // 5. PMO = último valor da segunda EMA
+  const pmo = ema2[ema2.length - 1];
 
   return pmo;
 }
