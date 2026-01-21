@@ -11,7 +11,6 @@ import {
   calculatePMO,
   getCloses,
 } from './indicators';
-import { runScanner, type ScannerConfig } from './scannerAplus';
 import { createEntrySignals } from './multiTimeframeStrategy';
 
 export interface SignalResult {
@@ -229,69 +228,6 @@ async function runMacdHistogramStrategy(
   }
 }
 
-/**
- * Estratégia Scanner A+: Usa o scanner A+ para gerar sinais de alta qualidade
- */
-async function runScannerAplusStrategy(
-  symbol: string,
-  timeframe: Timeframe,
-  params: StrategyParams
-): Promise<SignalResult | null> {
-  // O scanner A+ funciona de forma diferente - analisa múltiplos símbolos
-  // Por isso, vamos executar o scanner completo e filtrar pelo símbolo
-  // Mas para manter compatibilidade, vamos executar apenas para o símbolo solicitado
-  
-  // Nota: O scanner A+ funciona melhor quando executado para múltiplos símbolos
-  // Esta função será chamada por símbolo, mas vamos otimizar depois
-  
-  try {
-    const config: Partial<ScannerConfig> = {
-      topSymbolsLimit: params.topSymbolsLimit || 50,
-      minQuoteVolume: params.minQuoteVolume || 0,
-      minATRPercent: params.minATRPercent || 0.3,
-      maxATRPercent: params.maxATRPercent || 2.5,
-      minEntryScore: params.minEntryScore || 7,
-      topNAlerts: params.topNAlerts || 10, // Aumentar para pegar mais resultados
-      enableBreakoutRetest: params.enableBreakoutRetest || false,
-      breakoutPeriod: params.breakoutPeriod || 48,
-      cooldownMinutes: params.cooldownMinutes || 60,
-    };
-
-    // Executar scanner (ele já filtra por top símbolos)
-    const result = await runScanner(config);
-
-    // Buscar alerta para o símbolo específico
-    const alert = result.entries.find(a => a.symbol === symbol && a.alert_type === 'ENTRY');
-    
-    if (!alert) {
-      return null;
-    }
-
-    // Converter Alert para SignalResult
-    const direction = alert.side === 'LONG' ? 'BUY' : 'SELL';
-    const strength = Math.min(100, Math.round(alert.score * 10)); // Converter score 0-10 para 0-100
-
-    return {
-      direction,
-      entryPrice: alert.entry,
-      stopLoss: alert.stop,
-      target1: alert.t1,
-      target2: alert.t2,
-      target3: undefined,
-      strength,
-      extraInfo: JSON.stringify({
-        setup: alert.setup,
-        score: alert.score,
-        atr_pct_15m: alert.atr_pct_15m,
-        reasons: alert.reasons,
-        timeframe: alert.timeframe,
-      }),
-    };
-  } catch (error) {
-    console.error(`Erro na estratégia Scanner A+ para ${symbol}:`, error);
-    return null;
-  }
-}
 
 /**
  * Estratégia Multi-Timeframe (4H + 1H): Análise multi-timeframe com filtros de regime e bias
@@ -679,98 +615,7 @@ export async function runAllStrategies(): Promise<number> {
 
     const timeframes: Timeframe[] = ['1h', '4h'];
 
-    // Processar Scanner A+ separadamente (ele já analisa múltiplos símbolos)
-    const scannerAplusStrategy = strategies.find(s => s.name === 'SCANNER_APLUS' && s.isActive);
-    let scannerAplusSignals = 0;
-    
-    if (scannerAplusStrategy) {
-      try {
-        console.log('🔍 Executando Scanner A+...');
-        const params = JSON.parse(scannerAplusStrategy.params || '{}');
-        const config: Partial<ScannerConfig> = {
-          topSymbolsLimit: params.topSymbolsLimit || 50,
-          minQuoteVolume: params.minQuoteVolume || 0,
-          minATRPercent: params.minATRPercent || 0.3,
-          maxATRPercent: params.maxATRPercent || 2.5,
-          minEntryScore: params.minEntryScore || 7,
-          topNAlerts: params.topNAlerts || 10,
-          enableBreakoutRetest: params.enableBreakoutRetest || false,
-          breakoutPeriod: params.breakoutPeriod || 48,
-          cooldownMinutes: params.cooldownMinutes || 60,
-        };
-
-        const result = await runScanner(config);
-        console.log(`📊 Scanner A+ encontrou ${result.entries.length} alertas ENTRY e ${result.preSetups.length} PRE-SETUP`);
-
-        // Salvar cada alerta ENTRY como sinal
-        for (const alert of result.entries) {
-          if (alert.alert_type === 'ENTRY') {
-            // Verificar se já existe sinal similar recente
-            const recentSignal = await prisma.signal.findFirst({
-              where: {
-                symbol: alert.symbol,
-                strategyId: scannerAplusStrategy.id,
-                timeframe: alert.timeframe,
-                direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
-                status: { in: ['NEW', 'IN_PROGRESS'] },
-                generatedAt: {
-                  gte: new Date(Date.now() - 2 * 60 * 60 * 1000), // Últimas 2 horas
-                },
-              },
-            });
-
-            if (!recentSignal) {
-              const strength = Math.min(100, Math.round(alert.score * 10));
-              
-              await prisma.signal.create({
-                data: {
-                  symbol: alert.symbol,
-                  direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
-                  timeframe: alert.timeframe,
-                  strategyId: scannerAplusStrategy.id,
-                  strategyName: scannerAplusStrategy.displayName,
-                  entryPrice: alert.entry,
-                  stopLoss: alert.stop,
-                  target1: alert.t1,
-                  target2: alert.t2,
-                  target3: undefined,
-                  strength,
-                  status: 'NEW',
-                  extraInfo: JSON.stringify({
-                    setup: alert.setup,
-                    score: alert.score,
-                    atr_pct_15m: alert.atr_pct_15m,
-                    reasons: alert.reasons,
-                  }),
-                },
-              });
-
-              signalsCreated++;
-              scannerAplusSignals++;
-              console.log(
-                `✅ Sinal Scanner A+ criado: ${alert.symbol} ${alert.side} (Score: ${alert.score}, Strength: ${strength})`
-              );
-            } else {
-              console.log(`⏭️  Sinal Scanner A+ ignorado (duplicado recente): ${alert.symbol} ${alert.side}`);
-            }
-          }
-        }
-        
-        if (scannerAplusSignals > 0) {
-          console.log(`✨ Scanner A+ gerou ${scannerAplusSignals} novo(s) sinal(is)`);
-        } else {
-          console.log(`ℹ️  Scanner A+ não gerou novos sinais`);
-        }
-      } catch (error) {
-        console.error('❌ Erro ao executar Scanner A+:', error);
-      }
-    }
-
     for (const strategy of strategies) {
-      // Pular Scanner A+ pois já foi processado acima
-      if (strategy.name === 'SCANNER_APLUS') {
-        continue;
-      }
 
       const params = JSON.parse(strategy.params || '{}');
 
@@ -796,10 +641,6 @@ export async function runAllStrategies(): Promise<number> {
               case 'MACD_HISTOGRAM_PMO':
                 signalResult = await runMacdHistogramPmoStrategy(symbol, timeframe, params);
                 break;
-              case 'SCANNER_APLUS':
-                // Scanner A+ funciona de forma diferente - executa uma vez para todos os símbolos
-                // Vamos pular aqui e processar depois de forma otimizada
-                continue;
               default:
                 console.warn(`Estratégia desconhecida: ${strategy.name}`);
                 continue;

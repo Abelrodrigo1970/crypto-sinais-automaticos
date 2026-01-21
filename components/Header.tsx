@@ -25,7 +25,6 @@ export default function Header() {
     { href: '/estatisticas', label: 'Estatísticas' },
     { href: '/analise', label: 'Análise' },
     { href: '/top-movers', label: 'Top Movers' },
-    { href: '/scanner-aplus', label: 'Scanner A+' },
   ];
 
   return (

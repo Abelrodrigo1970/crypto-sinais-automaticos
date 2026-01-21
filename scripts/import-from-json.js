@@ -102,8 +102,6 @@ async function importFromJson() {
         let strategyName = signal.strategyName || 'RSI';
         if (strategyName === 'RSI Sobrecomprado/Sobrevendido') {
           strategyName = 'RSI';
-        } else if (strategyName === 'Scanner A+') {
-          strategyName = 'SCANNER_APLUS';
         }
         
         const strategy = await postgresClient.strategy.findUnique({
