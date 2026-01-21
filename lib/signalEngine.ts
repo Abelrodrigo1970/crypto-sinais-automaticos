@@ -7,6 +7,7 @@ import { fetchCandles, type Timeframe } from './marketData';
 import {
   calculateSMA,
   calculateMACD,
+  calculatePMO,
   getCloses,
 } from './indicators';
 import { createEntrySignals } from './multiTimeframeStrategy';
@@ -145,6 +146,134 @@ async function runMacdHistogramStrategy(
   }
 }
 
+
+/**
+ * Estratégia MACD Histogram + PMO: Histograma 1h com filtro PMO
+ * COMPRA: histograma cruza para cima E PMO > -0.5
+ * VENDA: histograma cruza para baixo E PMO < 0.5
+ */
+async function runMacdHistogramPmoStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  // Esta estratégia funciona apenas com timeframe 1h
+  if (timeframe !== '1h') {
+    return null;
+  }
+
+  const fastPeriod = params.fastPeriod || 12;
+  const slowPeriod = params.slowPeriod || 26;
+  const signalPeriod = params.signalPeriod || 9;
+  const pmoBuyThreshold = params.pmoBuyThreshold || -0.5;
+  const pmoSellThreshold = params.pmoSellThreshold || 0.5;
+  
+  // Parâmetros PMO TradingView: length1=35, length2=20, signal=10
+  const pmoRocPeriod = params.rocPeriodPmo || 35;
+  const pmoEmaFast = params.emaFastPmo || 20;
+  const pmoEmaSlow = params.emaSlowPmo || 10;
+
+  try {
+    // Buscar candles suficientes para MACD e PMO
+    const maxPeriod = Math.max(slowPeriod + signalPeriod, pmoRocPeriod + pmoEmaFast + pmoEmaSlow) + 20;
+    const candles = await fetchCandles(symbol, timeframe, maxPeriod);
+    
+    if (candles.length < maxPeriod) {
+      return null;
+    }
+
+    const closes = getCloses(candles);
+
+    // Calcular MACD
+    const macd = calculateMACD(closes, fastPeriod, slowPeriod, signalPeriod);
+    if (macd === null) {
+      return null;
+    }
+
+    // Calcular MACD anterior para detectar cruzamento
+    const prevCloses = closes.slice(0, -1);
+    const prevMacd = calculateMACD(prevCloses, fastPeriod, slowPeriod, signalPeriod);
+    if (prevMacd === null) {
+      return null;
+    }
+
+    // Calcular PMO com parâmetros TradingView
+    // calculatePMO: ROC(35) → EMA(20) → EMA(10) → PMO = (EMA20 - EMA10) × 10
+    const pmo = calculatePMO(closes, pmoRocPeriod, pmoEmaFast, pmoEmaSlow);
+    if (pmo === null) {
+      return null;
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+
+    // Sinal de COMPRA: Histograma cruza para cima (de negativo para positivo) E PMO > -0.5
+    if (prevMacd.histogram < 0 && macd.histogram > 0 && pmo > pmoBuyThreshold) {
+      const stopLoss = currentPrice * 0.96; // 4% abaixo
+      const target1 = currentPrice * 1.20; // 20% acima
+      const target2 = currentPrice * 1.20;
+      const target3 = currentPrice * 1.20;
+
+      // Força baseada no histograma e PMO
+      const histogramStrength = Math.min(50, Math.round(Math.abs(macd.histogram) * 1000));
+      const pmoStrength = Math.min(50, Math.round((pmo - pmoBuyThreshold) * 20));
+      const strength = Math.min(100, Math.max(60, histogramStrength + pmoStrength));
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          macd: macd.macd.toFixed(4),
+          signal: macd.signal.toFixed(4),
+          histogram: macd.histogram.toFixed(4),
+          prevHistogram: prevMacd.histogram.toFixed(4),
+          pmo: pmo.toFixed(4),
+          pmoBuyThreshold,
+        }),
+      };
+    }
+
+    // Sinal de VENDA: Histograma cruza para baixo (de positivo para negativo) E PMO < 0.5
+    if (prevMacd.histogram > 0 && macd.histogram < 0 && pmo < pmoSellThreshold) {
+      const stopLoss = currentPrice * 1.04; // 4% acima
+      const target1 = currentPrice * 0.80; // 20% abaixo
+      const target2 = currentPrice * 0.80;
+      const target3 = currentPrice * 0.80;
+
+      // Força baseada no histograma e PMO
+      const histogramStrength = Math.min(50, Math.round(Math.abs(macd.histogram) * 1000));
+      const pmoStrength = Math.min(50, Math.round((pmoSellThreshold - pmo) * 20));
+      const strength = Math.min(100, Math.max(60, histogramStrength + pmoStrength));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          macd: macd.macd.toFixed(4),
+          signal: macd.signal.toFixed(4),
+          histogram: macd.histogram.toFixed(4),
+          prevHistogram: prevMacd.histogram.toFixed(4),
+          pmo: pmo.toFixed(4),
+          pmoSellThreshold,
+        }),
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia MACD Histogram + PMO para ${symbol}:`, error);
+    return null;
+  }
+}
 
 /**
  * Estratégia Multi-Timeframe (4H + 1H): Análise multi-timeframe com filtros de regime e bias
@@ -296,6 +425,9 @@ export async function runAllStrategies(): Promise<number> {
             switch (strategy.name) {
               case 'MACD_HISTOGRAM':
                 signalResult = await runMacdHistogramStrategy(symbol, timeframe, params);
+                break;
+              case 'MACD_HISTOGRAM_PMO':
+                signalResult = await runMacdHistogramPmoStrategy(symbol, timeframe, params);
                 break;
               case 'MULTI_TIMEFRAME':
                 signalResult = await runMultiTimeframeStrategy(symbol, timeframe, params);
