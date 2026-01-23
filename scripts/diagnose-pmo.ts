@@ -90,7 +90,7 @@ async function diagnosePMO() {
             console.log(`   📉 Diferença: ${(pmo - (-1.617)).toFixed(4)}`);
 
             // Usar função calculatePMO para comparar
-            const pmoFromFunction = calculatePMO(closes, rocPeriod, emaFast, emaSlow);
+            const pmoFromFunction = calculatePMO(closes, rocPeriod, emaFast);
             if (pmoFromFunction !== null) {
               console.log(`   ✅ Função calculatePMO: ${pmoFromFunction.toFixed(4)}`);
               if (Math.abs(pmo - pmoFromFunction) > 0.0001) {

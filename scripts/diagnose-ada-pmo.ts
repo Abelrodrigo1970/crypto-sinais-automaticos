@@ -87,8 +87,8 @@ async function diagnoseADA() {
             console.log(`   📊 Nossa calculado: ${pmo.toFixed(6)}`);
             console.log(`   📉 Diferença: ${(pmo - (-0.5853046387)).toFixed(6)}`);
 
-            // Usar função calculatePMO
-            const pmoFromFunction = calculatePMO(closes, rocPeriod, emaFast, emaSlow);
+            // Usar função calculatePMO (firstLength=rocPeriod, secondLength=emaFast)
+            const pmoFromFunction = calculatePMO(closes, rocPeriod, emaFast);
             if (pmoFromFunction !== null) {
               console.log(`   ✅ Função calculatePMO: ${pmoFromFunction.toFixed(6)}`);
             }
