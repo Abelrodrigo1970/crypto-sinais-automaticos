@@ -511,6 +511,9 @@ export async function runAllStrategies(): Promise<number> {
                 break;
               case 'MA60_CROSSOVER':
                 signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ MA60 sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
                 break;
               default:
                 console.warn(`Estratégia desconhecida: ${strategy.name}`);
@@ -554,7 +557,11 @@ export async function runAllStrategies(): Promise<number> {
 
                 signalsCreated++;
                 console.log(
-                  `Sinal criado: ${symbol} ${signalResult.direction} (${strategy.displayName})`
+                  `✅ Sinal criado: ${symbol} ${signalResult.direction} (${strategy.displayName})`
+                );
+              } else {
+                console.log(
+                  `⏭️  Sinal duplicado ignorado: ${symbol} ${signalResult.direction} (${strategy.displayName}) - já existe nas últimas 2h`
                 );
               }
             }
