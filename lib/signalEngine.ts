@@ -279,7 +279,7 @@ async function runMacdHistogramPmoStrategy(
  * Timeframe 1h - sinais de hora a hora
  * Apenas para símbolos com market cap > 70 milhões
  */
-async function runMa60CrossoverStrategy(
+export async function runMa60CrossoverStrategy(
   symbol: string,
   timeframe: Timeframe,
   params: StrategyParams
@@ -385,7 +385,7 @@ async function runMa60CrossoverStrategy(
  * Busca símbolos da Binance com market cap superior a 70 milhões
  * Usa CoinGecko API para obter market cap real
  */
-async function fetchSymbolsWithMarketCap(minMarketCap: number = 70000000): Promise<string[]> {
+export async function fetchSymbolsWithMarketCap(minMarketCap: number = 70000000): Promise<string[]> {
   try {
     // Buscar todos os símbolos USDT da Binance Futures
     const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');

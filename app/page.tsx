@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [updatingMa60, setUpdatingMa60] = useState(false);
   const [message, setMessage] = useState('');
   const [filters, setFilters] = useState({
     symbol: '',
@@ -88,6 +89,26 @@ export default function DashboardPage() {
     }
   };
 
+  const handleUpdateMa60Signals = async () => {
+    try {
+      setUpdatingMa60(true);
+      setMessage('');
+      const response = await fetch('/api/run-ma60-signals', { method: 'POST' });
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage(data.message || `${data.signalsCreated} novo(s) sinal(is) MA60 gerado(s)`);
+        fetchSignals();
+      } else {
+        setMessage(data.error || 'Erro ao gerar sinais MA60');
+      }
+    } catch (error) {
+      setMessage('Erro ao gerar sinais MA60. Tente novamente.');
+    } finally {
+      setUpdatingMa60(false);
+    }
+  };
+
   const handleFilterChange = (newFilters: typeof filters) => {
     setFilters(newFilters);
   };
@@ -109,13 +130,22 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-          <button
-            onClick={handleUpdateSignals}
-            disabled={updating}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
-          >
-            {updating ? 'Gerando...' : 'Atualizar sinais agora'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleUpdateMa60Signals}
+              disabled={updatingMa60 || updating}
+              className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors"
+            >
+              {updatingMa60 ? 'Gerando MA60...' : 'Atualizar MA60'}
+            </button>
+            <button
+              onClick={handleUpdateSignals}
+              disabled={updating || updatingMa60}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+            >
+              {updating ? 'Gerando...' : 'Atualizar sinais agora'}
+            </button>
+          </div>
         </div>
 
         {message && (
