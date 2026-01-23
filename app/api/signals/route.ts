@@ -46,9 +46,11 @@ export async function GET(request: NextRequest) {
     if (strategy) {
       where.strategyName = { contains: strategy };
     }
-    // Aplicar filtro padrão de 40 se não especificado
-    const minStrengthValue = minStrength ? parseInt(minStrength) : 40;
-    where.strength = { gte: minStrengthValue };
+    // Aplicar filtro de força apenas se especificado (removido padrão para teste)
+    if (minStrength) {
+      const minStrengthValue = parseInt(minStrength);
+      where.strength = { gte: minStrengthValue };
+    }
     
     // Filtros de data
     if (dateFrom || dateTo) {
