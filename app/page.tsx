@@ -95,7 +95,7 @@ export default function DashboardPage() {
       direction: '',
       timeframe: '',
       strategy: '',
-      minStrength: '40',
+      minStrength: '0', // 0 = sem filtro
     });
   };
 
