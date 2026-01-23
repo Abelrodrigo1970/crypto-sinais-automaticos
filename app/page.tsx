@@ -43,8 +43,10 @@ export default function DashboardPage() {
       if (filters.direction) params.append('direction', filters.direction);
       if (filters.timeframe) params.append('timeframe', filters.timeframe);
       if (filters.strategy) params.append('strategy', filters.strategy);
-      // Sempre enviar minStrength (padrão 40)
-      params.append('minStrength', filters.minStrength || '40');
+      // Enviar minStrength apenas se especificado (removido padrão para teste)
+      if (filters.minStrength && filters.minStrength !== '0') {
+        params.append('minStrength', filters.minStrength);
+      }
 
       const response = await fetch(`/api/signals?${params.toString()}`);
       const data = await response.json();
