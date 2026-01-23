@@ -93,17 +93,28 @@ export default function DashboardPage() {
     try {
       setUpdatingMa60(true);
       setMessage('');
+      console.log('🔍 Chamando endpoint /api/run-ma60-signals...');
       const response = await fetch('/api/run-ma60-signals', { method: 'POST' });
+      
+      if (!response.ok) {
+        console.error('❌ Erro na resposta:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+        setMessage(errorData.error || `Erro ${response.status}: ${response.statusText}`);
+        return;
+      }
+      
       const data = await response.json();
+      console.log('✅ Resposta recebida:', data);
 
-      if (response.ok) {
+      if (data.success) {
         setMessage(data.message || `${data.signalsCreated} novo(s) sinal(is) MA60 gerado(s)`);
         fetchSignals();
       } else {
         setMessage(data.error || 'Erro ao gerar sinais MA60');
       }
     } catch (error) {
-      setMessage('Erro ao gerar sinais MA60. Tente novamente.');
+      console.error('❌ Erro ao chamar endpoint:', error);
+      setMessage(`Erro ao gerar sinais MA60: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setUpdatingMa60(false);
     }

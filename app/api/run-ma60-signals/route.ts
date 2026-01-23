@@ -4,24 +4,56 @@ import { prisma } from '@/lib/db';
 import { fetchSymbolsWithMarketCap, runMa60CrossoverStrategy } from '@/lib/signalEngine';
 
 export async function POST(request: NextRequest) {
+  console.log('📡 Endpoint /api/run-ma60-signals chamado');
   try {
     // Verifica autenticação
     if (!(await isAuthenticated())) {
+      console.log('❌ Autenticação falhou');
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
+    console.log('✅ Autenticação OK');
 
     // Buscar estratégia MA60_CROSSOVER
-    const strategy = await prisma.strategy.findFirst({
+    console.log('🔍 Buscando estratégia MA60_CROSSOVER...');
+    let strategy = await prisma.strategy.findFirst({
       where: { 
         name: 'MA60_CROSSOVER',
-        isActive: true 
       },
     });
 
+    // Se não encontrou, tentar criar (caso o seed não tenha rodado)
     if (!strategy) {
+      console.log('⚠️ Estratégia MA60_CROSSOVER não encontrada. Tentando criar...');
+      try {
+        strategy = await prisma.strategy.create({
+          data: {
+            name: 'MA60_CROSSOVER',
+            displayName: 'MA60 Crossover 1h',
+            description:
+              'Gera sinais quando o preço cruza a média móvel de 60 períodos. COMPRA: preço cruza acima da MA60. VENDA: preço cruza abaixo da MA60. Timeframe 1h - sinais de hora a hora. Apenas para símbolos com market cap > 70 milhões.',
+            isActive: true,
+            params: JSON.stringify({
+              maPeriod: 60,
+            }),
+          },
+        });
+        console.log('✅ Estratégia MA60_CROSSOVER criada com sucesso');
+      } catch (error) {
+        console.error('❌ Erro ao criar estratégia:', error);
+        return NextResponse.json({
+          error: 'Estratégia MA60_CROSSOVER não encontrada e não foi possível criar. Execute o seed do banco de dados.',
+          details: error instanceof Error ? error.message : 'Erro desconhecido',
+        }, { status: 404 });
+      }
+    } else {
+      console.log(`✅ Estratégia encontrada: ${strategy.displayName} (ativa: ${strategy.isActive})`);
+    }
+
+    if (!strategy.isActive) {
+      console.log('⚠️ Estratégia está inativa');
       return NextResponse.json({
-        error: 'Estratégia MA60_CROSSOVER não encontrada ou inativa',
-      }, { status: 404 });
+        error: 'Estratégia MA60_CROSSOVER está inativa',
+      }, { status: 400 });
     }
 
     const params = JSON.parse(strategy.params || '{}');
