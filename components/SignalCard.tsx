@@ -31,7 +31,17 @@ export default function SignalCard({ signal }: SignalCardProps) {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('pt-BR');
+    const date = new Date(dateString);
+    // Formatar com fuso horário local
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
   };
 
   return (
