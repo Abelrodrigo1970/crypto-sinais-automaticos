@@ -53,6 +53,7 @@ reset-repo.ps1
 revert-now.ps1
 revert-to-pmo-commit.ps1
 push-to-github.ps1
+create-clean-repo-final.ps1
 
 # arquivos de output gerados
 output/*.json
@@ -69,4 +70,15 @@ VERIFICAR_CONFIGURACAO.md
 
 # data directory
 /data/
+
+# IDE
+.vscode/
+.idea/
+
+# Prisma backups
+prisma/schema.prisma.backup
+prisma/seed.ts
+
+# Railway config (opcional - descomente se não quiser commitado)
+# railway.json
 

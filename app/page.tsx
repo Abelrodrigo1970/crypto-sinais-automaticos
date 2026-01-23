@@ -56,10 +56,30 @@ export default function DashboardPage() {
 
       if (response.ok) {
         console.log(`✅ Sinais recebidos: ${data.signals.length}`);
-        const ma60Signals = data.signals.filter((s: any) => s.strategyName?.includes('MA60'));
+        
+        // Debug: ver todos os strategyName
+        const allStrategyNames = data.signals.map((s: any) => s.strategyName || s.strategy?.name || 'null').filter((n: string) => n && n !== 'null');
+        const uniqueStrategies = [...new Set(allStrategyNames)];
+        console.log('📋 Estratégias encontradas:', uniqueStrategies);
+        
+        // Debug: ver sinais que contêm "MA60" no strategyName ou strategy.name
+        const ma60Signals = data.signals.filter((s: any) => {
+          const strategyName = s.strategyName || '';
+          const strategyNameFromRelation = s.strategy?.name || '';
+          const hasMA60 = strategyName.includes('MA60') || strategyNameFromRelation === 'MA60_CROSSOVER';
+          if (hasMA60) {
+            console.log(`   🔍 Sinal MA60 encontrado: ${s.symbol} | strategyName: "${strategyName}" | strategy.name: "${strategyNameFromRelation}"`);
+          }
+          return hasMA60;
+        });
         console.log(`📊 Sinais MA60: ${ma60Signals.length}`);
         if (ma60Signals.length > 0) {
-          console.log('   Sinais MA60:', ma60Signals.map((s: any) => `${s.symbol} ${s.direction}`));
+          console.log('   Sinais MA60:', ma60Signals.map((s: any) => `${s.symbol} ${s.direction} | "${s.strategyName}"`));
+        } else {
+          console.log('   ⚠️ Nenhum sinal MA60 encontrado. Verificando strategyName de todos os sinais...');
+          data.signals.slice(0, 5).forEach((s: any) => {
+            console.log(`   - ${s.symbol}: strategyName="${s.strategyName}"`);
+          });
         }
         setSignals(data.signals);
       } else {

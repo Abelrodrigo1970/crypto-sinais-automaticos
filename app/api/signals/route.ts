@@ -87,6 +87,30 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Debug: log de sinais MA60
+    const ma60Signals = signals.filter(s => 
+      s.strategyName?.includes('MA60') || s.strategy?.name === 'MA60_CROSSOVER'
+    );
+    if (ma60Signals.length > 0) {
+      console.log(`📊 API: ${ma60Signals.length} sinais MA60 encontrados`);
+      ma60Signals.slice(0, 3).forEach(s => {
+        console.log(`   - ${s.symbol}: strategyName="${s.strategyName}", strategy.name="${s.strategy?.name}"`);
+      });
+    } else {
+      console.log('⚠️ API: Nenhum sinal MA60 encontrado na query');
+      // Log dos primeiros 3 sinais para debug
+      signals.slice(0, 3).forEach(s => {
+        console.log(`   - ${s.symbol}: strategyName="${s.strategyName}", strategy.name="${s.strategy?.name}"`);
+      });
+    }
+
+    // Debug: verificar serialização JSON
+    const jsonSignals = JSON.parse(JSON.stringify(signals));
+    const jsonMa60 = jsonSignals.filter((s: any) => 
+      s.strategyName?.includes('MA60') || s.strategy?.name === 'MA60_CROSSOVER'
+    );
+    console.log(`📊 API JSON: ${jsonMa60.length} sinais MA60 após serialização`);
+
     return NextResponse.json({ signals });
   } catch (error) {
     console.error('Erro ao buscar sinais:', error);

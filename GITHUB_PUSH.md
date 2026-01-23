@@ -45,3 +45,5 @@ gh repo create crypto-sinais-automaticos --private --source=. --remote=origin --
 
 
 
+
+
