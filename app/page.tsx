@@ -48,11 +48,22 @@ export default function DashboardPage() {
         params.append('minStrength', filters.minStrength);
       }
 
-      const response = await fetch(`/api/signals?${params.toString()}`);
+      const url = `/api/signals?${params.toString()}`;
+      console.log('🔍 Buscando sinais:', url);
+      
+      const response = await fetch(url);
       const data = await response.json();
 
       if (response.ok) {
+        console.log(`✅ Sinais recebidos: ${data.signals.length}`);
+        const ma60Signals = data.signals.filter((s: any) => s.strategyName?.includes('MA60'));
+        console.log(`📊 Sinais MA60: ${ma60Signals.length}`);
+        if (ma60Signals.length > 0) {
+          console.log('   Sinais MA60:', ma60Signals.map((s: any) => `${s.symbol} ${s.direction}`));
+        }
         setSignals(data.signals);
+      } else {
+        console.error('❌ Erro na API:', data);
       }
     } catch (error) {
       console.error('Erro ao buscar sinais:', error);
