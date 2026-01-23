@@ -275,8 +275,8 @@ async function runMacdHistogramPmoStrategy(
 }
 
 /**
- * Estratégia MA60 Crossover 4H: Gera sinais quando preço cruza a média móvel de 60 períodos
- * Apenas no timeframe 4h e apenas nos horários: 8h, 12h, 16h, 20h, 23h
+ * Estratégia MA60 Crossover 1H: Gera sinais quando preço cruza a média móvel de 60 períodos
+ * Timeframe 1h - sinais de hora a hora
  * Apenas para símbolos com market cap > 70 milhões
  */
 async function runMa60CrossoverStrategy(
@@ -284,13 +284,8 @@ async function runMa60CrossoverStrategy(
   timeframe: Timeframe,
   params: StrategyParams
 ): Promise<SignalResult | null> {
-  // Esta estratégia funciona apenas com timeframe 4h
-  if (timeframe !== '4h') {
-    return null;
-  }
-
-  // Verificar se o horário atual está permitido
-  if (!isAllowedTime()) {
+  // Esta estratégia funciona apenas com timeframe 1h
+  if (timeframe !== '1h') {
     return null;
   }
 
