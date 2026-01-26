@@ -276,6 +276,7 @@ async function runMacdHistogramPmoStrategy(
 
 /**
  * Estratégia MA60 Crossover 1H: Gera sinais quando preço cruza a média móvel de 60 períodos
+ * Filtro de tendência: Só compra se preço acima da MA200, só vende se preço abaixo da MA200
  * Timeframe 1h - sinais de hora a hora
  * Apenas para símbolos com market cap > 70 milhões
  */
@@ -290,11 +291,13 @@ export async function runMa60CrossoverStrategy(
   }
 
   const maPeriod = params.maPeriod || 60;
+  const ma200Period = 200; // Filtro de tendência
 
   try {
-    // Buscar candles suficientes para calcular MA60
-    const candles = await fetchCandles(symbol, timeframe, maPeriod + 20);
-    if (candles.length < maPeriod + 2) {
+    // Buscar candles suficientes para calcular MA60 e MA200
+    const candlesNeeded = Math.max(maPeriod, ma200Period) + 20;
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+    if (candles.length < Math.max(maPeriod, ma200Period) + 2) {
       return null;
     }
 
@@ -313,11 +316,22 @@ export async function runMa60CrossoverStrategy(
       return null;
     }
 
+    // Calcular MA200 para filtro de tendência
+    const currentMA200 = calculateSMA(closes, ma200Period);
+    if (currentMA200 === null) {
+      return null;
+    }
+
     const currentPrice = candles[candles.length - 1].close;
     const prevPrice = candles[candles.length - 2].close;
 
-    // Sinal de COMPRA: Preço cruza acima da MA60 (preço anterior estava abaixo, atual está acima)
+    // Sinal de COMPRA: Preço cruza acima da MA60 E preço está acima da MA200 (tendência de alta)
     if (prevPrice < prevMA && currentPrice > currentMA) {
+      // Filtro: só compra se preço estiver acima da MA200
+      if (currentPrice <= currentMA200) {
+        return null; // Preço abaixo da MA200, não compra
+      }
+
       const stopLoss = currentPrice * 0.96; // 4% abaixo
       const target1 = currentPrice * 1.20; // 20% acima
       const target2 = currentPrice * 1.20;
@@ -337,16 +351,23 @@ export async function runMa60CrossoverStrategy(
         strength,
         extraInfo: JSON.stringify({
           ma60: currentMA.toFixed(4),
+          ma200: currentMA200.toFixed(4),
           prevPrice: prevPrice.toFixed(4),
           currentPrice: currentPrice.toFixed(4),
           distanceFromMA: distanceFromMA.toFixed(2),
+          distanceFromMA200: ((currentPrice - currentMA200) / currentMA200 * 100).toFixed(2),
           maPeriod,
         }),
       };
     }
 
-    // Sinal de VENDA: Preço cruza abaixo da MA60 (preço anterior estava acima, atual está abaixo)
+    // Sinal de VENDA: Preço cruza abaixo da MA60 E preço está abaixo da MA200 (tendência de baixa)
     if (prevPrice > prevMA && currentPrice < currentMA) {
+      // Filtro: só vende se preço estiver abaixo da MA200
+      if (currentPrice >= currentMA200) {
+        return null; // Preço acima da MA200, não vende
+      }
+
       const stopLoss = currentPrice * 1.04; // 4% acima
       const target1 = currentPrice * 0.80; // 20% abaixo
       const target2 = currentPrice * 0.80;
@@ -366,9 +387,11 @@ export async function runMa60CrossoverStrategy(
         strength,
         extraInfo: JSON.stringify({
           ma60: currentMA.toFixed(4),
+          ma200: currentMA200.toFixed(4),
           prevPrice: prevPrice.toFixed(4),
           currentPrice: currentPrice.toFixed(4),
           distanceFromMA: distanceFromMA.toFixed(2),
+          distanceFromMA200: ((currentMA200 - currentPrice) / currentMA200 * 100).toFixed(2),
           maPeriod,
         }),
       };
