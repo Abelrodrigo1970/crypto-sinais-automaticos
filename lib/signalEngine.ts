@@ -9,6 +9,8 @@ import {
   calculateMACD,
   calculatePMO,
   getCloses,
+  getVolumes,
+  calculateVolumeMA,
 } from './indicators';
 
 export interface SignalResult {
@@ -405,6 +407,120 @@ export async function runMa60CrossoverStrategy(
 }
 
 /**
+ * Estratégia Volume Spike: Gera sinais quando volume é maior que 6 vezes a média das últimas 20 horas
+ * Timeframe 1h - analisa volume das últimas 20 horas
+ */
+export async function runVolumeSpikeStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  // Esta estratégia funciona apenas com timeframe 1h
+  if (timeframe !== '1h') {
+    return null;
+  }
+
+  const volumeMultiplier = params.volumeMultiplier || 6; // Múltiplo da média de volume
+  const lookbackHours = params.lookbackHours || 20; // Período para calcular média de volume
+
+  try {
+    // Buscar candles suficientes (20 horas + alguns extras para garantir)
+    const candlesNeeded = lookbackHours + 5;
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+    
+    if (candles.length < lookbackHours + 1) {
+      return null;
+    }
+
+    const volumes = getVolumes(candles);
+    const currentVolume = volumes[volumes.length - 1];
+    
+    // Calcular média de volume das últimas 20 horas (excluindo o candle atual)
+    const volumesForAverage = volumes.slice(-lookbackHours - 1, -1); // Últimas 20 horas, excluindo atual
+    const volumeAverage = calculateVolumeMA(volumesForAverage, lookbackHours);
+    
+    if (volumeAverage === null || volumeAverage === 0) {
+      return null;
+    }
+
+    // Verificar se volume atual é maior que 6 vezes a média
+    const volumeRatio = currentVolume / volumeAverage;
+    
+    if (volumeRatio < volumeMultiplier) {
+      return null; // Volume não é suficientemente alto
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+    const prevPrice = candles[candles.length - 2].close;
+    
+    // Determinar direção baseada no movimento de preço
+    // Se preço subiu com volume alto = BUY, se caiu = SELL
+    const priceChange = currentPrice - prevPrice;
+    const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
+
+    // Calcular stop loss e targets
+    if (direction === 'BUY') {
+      const stopLoss = currentPrice * 0.96; // 4% abaixo
+      const target1 = currentPrice * 1.20; // 20% acima
+      const target2 = currentPrice * 1.20;
+      const target3 = currentPrice * 1.20;
+
+      // Força baseada no múltiplo de volume (quanto maior, mais forte)
+      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          currentVolume: currentVolume.toFixed(2),
+          volumeAverage: volumeAverage.toFixed(2),
+          volumeRatio: volumeRatio.toFixed(2),
+          volumeMultiplier,
+          lookbackHours,
+          priceChange: priceChange.toFixed(4),
+          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
+        }),
+      };
+    } else {
+      const stopLoss = currentPrice * 1.04; // 4% acima
+      const target1 = currentPrice * 0.80; // 20% abaixo
+      const target2 = currentPrice * 0.80;
+      const target3 = currentPrice * 0.80;
+
+      // Força baseada no múltiplo de volume
+      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          currentVolume: currentVolume.toFixed(2),
+          volumeAverage: volumeAverage.toFixed(2),
+          volumeRatio: volumeRatio.toFixed(2),
+          volumeMultiplier,
+          lookbackHours,
+          priceChange: priceChange.toFixed(4),
+          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
+        }),
+      };
+    }
+  } catch (error) {
+    console.error(`Erro na estratégia Volume Spike para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
  * Busca símbolos da Binance com market cap superior a 70 milhões
  * Usa CoinGecko API para obter market cap real
  */
@@ -536,6 +652,12 @@ export async function runAllStrategies(): Promise<number> {
                 signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
                 if (signalResult) {
                   console.log(`✅ MA60 sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'VOLUME_SPIKE':
+                signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
                 }
                 break;
               default:
