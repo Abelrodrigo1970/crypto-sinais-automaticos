@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './db';
-import { fetchCandles, type Timeframe } from './marketData';
+import { fetchCandles, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import {
   calculateSMA,
   calculateMACD,
@@ -591,30 +591,16 @@ export async function runAllStrategies(): Promise<number> {
       return 0;
     }
 
-    // Símbolos e timeframes para analisar
-    // Linha 316 - Adicione quantas quiser
-    const symbols = [
-      'LIGHTUSDT', 'FOLKSUSDT', 'BEATUSDT', 'RIVERUSDT', 'FHEUSDT',
-      'BROCCOLI714USDT', 'TAKEUSDT', 'TRADOORUSDT', 'PIPPINUSDT', 'XNYUSDT',
-      'TRUTHUSDT', 'RVVUSDT', 'PIEVERSEUSDT', 'JELLYJELLYUSDT', 'HUSDT',
-      'PTBUSDT', 'STABLEUSDT', 'POWERUSDT', 'LUNA2USDT', 'BASUSDT',
-      'MOODENGUSDT', 'CLOUSDT', '1000LUNCUSDT', 'AIOTUSDT', 'ICNTUSDT',
-      'ATUSDT', 'BDXNUSDT', 'LYNUSDT', 'ZBTUSDT', 'BOBUSDT',
-      'COMMONUSDT', 'ACTUSDT', 'LABUSDT', 'USTCUSDT', 'QUSDT',
-      '4USDT', 'RLSUSDT', 'EVAAUSDT', 'USELESSUSDT', 'CCUSDT',
-      'SQDUSDT', 'SWARMSUSDT', 'GUNUSDT', 'MYXUSDT', 'YALAUSDT',
-      'ALCHUSDT', 'BUSDT', 'ARCUSDT', 'A2ZUSDT', 'BULLAUSDT',
-      'UAIUSDT', 'TANSSIUSDT', 'XPINUSDT', 'CHESSUSDT', 'SKYAIUSDT',
-      'MERLUSDT', 'ESPORTSUSDT', 'MONUSDT', 'SAPIENUSDT', 'B2USDT',
-      'KGENUSDT', 'AVAAIUSDT', 'AINUSDT', 'APRUSDT', 'PROMPTUSDT',
-      'STBLUSDT', 'FARTCOINUSDT', 'HMSTRUSDT', 'FLOWUSDT', 'ZRCUSDT',
-      'COAIUSDT', 'BLUAIUSDT', 'IRYSUSDT', 'PLAYUSDT', 'AKEUSDT',
-      'DAMUSDT', 'RECALLUSDT', 'ALLOUSDT', 'BRETTUSDT', 'GIGGLEUSDT',
-      'JCTUSDT', 'HANAUSDT', 'DOODUSDT', 'GRIFFAINUSDT', 'ANIMEUSDT',
-      'NAORISUSDT', 'AIXBTUSDT', 'ZEREBROUSDT', 'ACEUSDT', 'AVNTUSDT',
-      'WIFUSDT', 'AXLUSDT', 'BLESSUSDT', 'TAUSDT', 'DOLOUSDT',
-      'BRUSDT', 'BROCCOLIF3BUSDT', 'MUSDT', 'EPTUSDT', 'NILUSDT',
-  ];
+    // Símbolos: top 150 por volume 24h na Binance Futures (mín. 1M USDT)
+    console.log('🔍 Buscando símbolos por volume na Binance Futures...');
+    let symbols: string[] = [];
+    try {
+      symbols = await fetchTopSymbolsByVolume(150, 1_000_000);
+      console.log(`✅ Encontrados ${symbols.length} símbolos (top por volume)`);
+    } catch (err) {
+      console.error('Erro ao buscar símbolos por volume, usando fallback:', err);
+      symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
+    }
 
     const timeframes: Timeframe[] = ['1h', '4h'];
 
