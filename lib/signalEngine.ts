@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './db';
-import { fetchCandles, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
+import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import {
   calculateSMA,
   calculateMACD,
@@ -591,14 +591,14 @@ export async function runAllStrategies(): Promise<number> {
       return 0;
     }
 
-    // Símbolos: top 150 por volume 24h na Binance Futures (mín. 1M USDT)
-    console.log('🔍 Buscando símbolos por volume na Binance Futures...');
+    // Símbolos: top 150 por variação de preço na última hora (momentum 1h), não por volume 24h
+    console.log('🔍 Buscando símbolos por variação na última hora (Binance Futures)...');
     let symbols: string[] = [];
     try {
-      symbols = await fetchTopSymbolsByVolume(150, 1_000_000);
-      console.log(`✅ Encontrados ${symbols.length} símbolos (top por volume)`);
+      symbols = await fetchTopSymbolsBy1hPriceChange(150, 250);
+      console.log(`✅ Encontrados ${symbols.length} símbolos (top por alta na última hora)`);
     } catch (err) {
-      console.error('Erro ao buscar símbolos por volume, usando fallback:', err);
+      console.error('Erro ao buscar símbolos por variação 1h, usando fallback:', err);
       symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT'];
     }
 

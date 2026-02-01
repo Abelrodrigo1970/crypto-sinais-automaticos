@@ -238,3 +238,69 @@ export async function fetchTopSymbolsByVolume(
   }
 }
 
+/** Atraso em ms (evitar rate limit da Binance) */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Busca os símbolos com maior variação de preço na última hora (1h).
+ * Não usa volume 24h: lista de candidatos vem do exchangeInfo (Binance Futures).
+ * Ordena apenas por % de variação na última hora.
+ * @param limit Número máximo de símbolos (padrão: 150)
+ * @param candidatePool Quantos símbolos consultar (klines 1h) antes de ordenar (padrão: 250)
+ */
+export async function fetchTopSymbolsBy1hPriceChange(
+  limit: number = 150,
+  candidatePool: number = 250
+): Promise<string[]> {
+  try {
+    const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar exchangeInfo: ${response.statusText}`);
+    }
+    const data = await response.json();
+
+    const usdtPairs: string[] = (data.symbols || [])
+      .filter((s: any) => {
+        return (
+          s.symbol?.endsWith('USDT') &&
+          !s.symbol?.includes('BUSD') &&
+          s.status === 'TRADING' &&
+          (s.contractType === 'PERPETUAL' || !s.contractType)
+        );
+      })
+      .slice(0, candidatePool)
+      .map((s: any) => s.symbol);
+
+    const results: { symbol: string; changePercent1h: number }[] = [];
+
+    for (let i = 0; i < usdtPairs.length; i++) {
+      const symbol = usdtPairs[i];
+      try {
+        const klinesRes = await fetch(
+          `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=2`
+        );
+        if (!klinesRes.ok) continue;
+        const klines = await klinesRes.json();
+        if (klines.length < 2) continue;
+        const prevClose = parseFloat(klines[0][4]);
+        const lastClose = parseFloat(klines[1][4]);
+        if (prevClose === 0) continue;
+        const changePercent1h = ((lastClose - prevClose) / prevClose) * 100;
+        results.push({ symbol, changePercent1h });
+      } catch {
+        // ignorar falha por símbolo
+      }
+      if ((i + 1) % 50 === 0) await delay(100);
+      else await delay(80);
+    }
+
+    results.sort((a, b) => b.changePercent1h - a.changePercent1h);
+    return results.slice(0, limit).map((r) => r.symbol);
+  } catch (error) {
+    console.error('Erro ao buscar símbolos por variação 1h:', error);
+    throw error;
+  }
+}
+
