@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './db';
-import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
+import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import {
   calculateSMA,
   calculateMACD,
@@ -33,7 +33,7 @@ export interface StrategyParams {
  * Estratégia MACD Histogram: Gera sinais baseado em cruzamento do histograma (zero line)
  * Apenas no timeframe 4h e apenas nos horários: 8h, 12h, 16h, 20h, 23h
  */
-async function runMacdHistogramStrategy(
+export async function runMacdHistogramStrategy(
   symbol: string,
   timeframe: Timeframe,
   params: StrategyParams
@@ -153,7 +153,7 @@ async function runMacdHistogramStrategy(
  * COMPRA: histograma cruza para cima E PMO > -0.5
  * VENDA: histograma cruza para baixo E PMO < 0.5
  */
-async function runMacdHistogramPmoStrategy(
+export async function runMacdHistogramPmoStrategy(
   symbol: string,
   timeframe: Timeframe,
   params: StrategyParams
@@ -424,34 +424,40 @@ export async function runVolumeSpikeStrategy(
   const lookbackHours = params.lookbackHours || 20; // Período para calcular média de volume
 
   try {
-    // Buscar candles suficientes (20 horas + alguns extras para garantir)
+    // Buscar candles suficientes: 20 para média + 1 candle a avaliar (fechado) + margem
+    // A API Binance devolve o último candle como o candle ATUAL (incompleto). O candle
+    // fechado que queremos avaliar (ex.: 15h-16h) é o penúltimo (index -2).
     const candlesNeeded = lookbackHours + 5;
     const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
     
-    if (candles.length < lookbackHours + 1) {
+    // Precisamos de pelo menos: 20 para média + 1 candle fechado a avaliar + 1 último (incompleto)
+    if (candles.length < lookbackHours + 2) {
       return null;
     }
 
     const volumes = getVolumes(candles);
-    const currentVolume = volumes[volumes.length - 1];
+    // Usar o ÚLTIMO CANDLE FECHADO (penúltimo da lista), não o atual incompleto
+    const lastClosedIndex = volumes.length - 2;
+    const currentVolume = volumes[lastClosedIndex];
     
-    // Calcular média de volume das últimas 20 horas (excluindo o candle atual)
-    const volumesForAverage = volumes.slice(-lookbackHours - 1, -1); // Últimas 20 horas, excluindo atual
+    // Média das 20 horas anteriores ao candle que estamos a avaliar (excluir o incompleto e o que avaliamos)
+    const volumesForAverage = volumes.slice(-lookbackHours - 2, -2); // 20 volumes antes do candle fechado
     const volumeAverage = calculateVolumeMA(volumesForAverage, lookbackHours);
     
     if (volumeAverage === null || volumeAverage === 0) {
       return null;
     }
 
-    // Verificar se volume atual é maior que 6 vezes a média
+    // Verificar se volume do candle fechado é maior que 6 vezes a média
     const volumeRatio = currentVolume / volumeAverage;
     
     if (volumeRatio < volumeMultiplier) {
       return null; // Volume não é suficientemente alto
     }
 
-    const currentPrice = candles[candles.length - 1].close;
-    const prevPrice = candles[candles.length - 2].close;
+    // Preço de fecho e anterior do candle que teve o spike (candle fechado)
+    const currentPrice = candles[lastClosedIndex].close;
+    const prevPrice = candles[lastClosedIndex - 1].close;
     
     // Determinar direção baseada no movimento de preço
     // Se preço subiu com volume alto = BUY, se caiu = SELL
@@ -609,6 +615,7 @@ export async function runAllStrategies(): Promise<number> {
       const params = JSON.parse(strategy.params || '{}');
 
       // Para estratégia MA60_CROSSOVER, usar símbolos com market cap > 70 milhões
+      // Para VOLUME_SPIKE, usar top por volume 24h para apanhar pares com volume relevante (ex.: RLSUSDT)
       let symbolsToAnalyze = symbols;
       if (strategy.name === 'MA60_CROSSOVER') {
         console.log('🔍 Buscando símbolos com market cap > 70 milhões para estratégia MA60_CROSSOVER...');
@@ -618,6 +625,15 @@ export async function runAllStrategies(): Promise<number> {
           console.log(`✅ Encontrados ${highMarketCapSymbols.length} símbolos com market cap > 70 milhões`);
         } else {
           console.warn('⚠️  Nenhum símbolo com market cap > 70 milhões encontrado, usando lista padrão');
+        }
+      } else if (strategy.name === 'VOLUME_SPIKE') {
+        const maxVolumeSymbols = 500;
+        const minQuoteVolume = 100000; // volume mínimo para evitar pares mortos
+        console.log('🔍 Buscando símbolos por volume 24h para estratégia VOLUME_SPIKE...');
+        const volumeSymbols = await fetchTopSymbolsByVolume(maxVolumeSymbols, minQuoteVolume);
+        if (volumeSymbols.length > 0) {
+          symbolsToAnalyze = volumeSymbols;
+          console.log(`✅ Encontrados ${volumeSymbols.length} símbolos (top por volume 24h)`);
         }
       }
 
