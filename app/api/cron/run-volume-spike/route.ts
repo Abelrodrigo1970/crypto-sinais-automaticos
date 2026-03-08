@@ -6,7 +6,7 @@ import { update24hResults } from '@/lib/update24hResults';
 
 /**
  * Endpoint de cron dedicado para Volume Spike
- * Otimizado para timeout 60s (cron-job.org): 50 símbolos, delay 200ms
+ * Otimizado para timeout 60s (cron-job.org): 100 símbolos, delay 200ms
  * Verifica horário 8:00 - 23:59, usa CRON_SECRET
  */
 export async function GET(request: NextRequest) {
@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
     const params = JSON.parse(strategy.params || '{}');
     let signalsCreated = 0;
 
-    // 50 símbolos + 200ms delay = ~25-40s (evita timeout 60s)
-    const symbols = await fetchTopSymbolsByVolume(50, 100000);
+    // 100 símbolos + 200ms delay = ~45-55s (evita timeout 60s)
+    const symbols = await fetchTopSymbolsByVolume(100, 100000);
     const timeframe = '1h' as const;
 
     for (const symbol of symbols) {
