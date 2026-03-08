@@ -6,8 +6,7 @@ import { update24hResults } from '@/lib/update24hResults';
 
 /**
  * Endpoint de cron dedicado para Volume Spike
- * Execução mais rápida (~3-5 min) que run-signals (~20-35 min)
- * Evita timeout 502 no Railway
+ * Otimizado para timeout 60s (cron-job.org): 50 símbolos, delay 200ms
  * Verifica horário 8:00 - 23:59, usa CRON_SECRET
  */
 export async function GET(request: NextRequest) {
@@ -52,8 +51,8 @@ export async function GET(request: NextRequest) {
     const params = JSON.parse(strategy.params || '{}');
     let signalsCreated = 0;
 
-    // 200 símbolos para equilibrar cobertura e tempo (~2-3 min)
-    const symbols = await fetchTopSymbolsByVolume(200, 100000);
+    // 50 símbolos + 200ms delay = ~25-40s (evita timeout 60s)
+    const symbols = await fetchTopSymbolsByVolume(50, 100000);
     const timeframe = '1h' as const;
 
     for (const symbol of symbols) {
@@ -94,7 +93,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (error) {
         console.error(`Erro ao processar ${symbol}:`, error);
       }
