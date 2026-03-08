@@ -2,6 +2,15 @@
 
 O sistema está configurado para executar automaticamente a cada hora entre 8:00 e 23:59.
 
+## Endpoints disponíveis
+
+| Endpoint | Estratégias | Tempo estimado | Uso recomendado |
+|----------|-------------|----------------|-----------------|
+| `/api/cron/run-volume-spike` | Apenas Volume Spike | ~2-4 min | ✅ **Cron hora a hora** (evita timeout) |
+| `/api/cron/run-signals` | Todas (MACD, MA60, Volume Spike, etc.) | ~20-35 min | Manual ou cron menos frequente |
+
+**Importante:** Use `/api/cron/run-volume-spike` para o cron-job.org. O endpoint completo pode causar 502 Bad Gateway (timeout).
+
 ## Horários de Execução
 
 - **8:00** - Primeira execução do dia
@@ -21,13 +30,12 @@ O sistema está configurado para executar automaticamente a cada hora entre 8:00
 ### Passo 2: Criar Cron Job
 1. Clique em "Create cronjob"
 2. Configure:
-   - **Title:** Crypto Sinais Automáticos
-   - **Address (URL):** `https://seu-dominio.up.railway.app/api/cron/run-signals`
-   - **Schedule:** Custom
-   - **Cron Expression:** `0 8-23 * * *` (executa às XX:00 de 8h até 23h)
-   - **OU** se não tiver custom: "Every hour" e configure para executar de 8h até 23h
+   - **Title:** Crypto Sinais - Volume Spike
+   - **Address (URL):** `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-volume-spike`
+   - **Schedule:** Custom → Cron Expression: `0 8-23 * * *`
+   - **OU** "Every hour" (de 8h até 23h)
    - **Request method:** GET
-   - **Request headers (opcional):** Se configurou CRON_SECRET:
+   - **Request headers (se CRON_SECRET configurado):**
      ```
      Authorization: Bearer seu-token-secreto
      ```
@@ -49,9 +57,14 @@ O sistema está configurado para executar automaticamente a cada hora entre 8:00
 
 ## Verificação Manual
 
-Você pode testar manualmente acessando:
+**Volume Spike (recomendado para cron):**
 ```
-https://seu-dominio.up.railway.app/api/cron/run-signals
+https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-volume-spike
+```
+
+**Todas as estratégias:**
+```
+https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-signals
 ```
 
 **Respostas esperadas:**
@@ -77,6 +90,11 @@ https://seu-dominio.up.railway.app/api/cron/run-signals
 - Gratuito para repositórios públicos
 
 ## Troubleshooting
+
+### Erro 502 Bad Gateway / Cron desativado
+- **Causa:** Timeout - o endpoint demorou demais (Railway ~60-300s)
+- **Solução:** Use `/api/cron/run-volume-spike` em vez de `/api/cron/run-signals`
+- Reative o cron no cron-job.org e altere a URL
 
 ### Cron não está executando
 1. Verifique se o cron-job.org está ativo
