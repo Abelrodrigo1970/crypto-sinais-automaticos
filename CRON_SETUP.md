@@ -2,14 +2,14 @@
 
 O sistema está configurado para executar automaticamente a cada hora entre 8:00 e 23:59.
 
-## Endpoints disponíveis
+## Endpoints disponíveis (2 cron jobs separados)
 
-| Endpoint | Estratégias | Tempo estimado | Uso recomendado |
-|----------|-------------|----------------|-----------------|
-| `/api/cron/run-volume-spike` | Apenas Volume Spike | ~2-4 min | ✅ **Cron hora a hora** (evita timeout) |
-| `/api/cron/run-signals` | Todas (MACD, MA60, Volume Spike, etc.) | ~20-35 min | Manual ou cron menos frequente |
+| Endpoint | Estratégias | Tempo estimado | Cron-job.org |
+|----------|-------------|----------------|--------------|
+| `/api/cron/run-signals` | MACD Histogram, MACD+PMO, MA60 (sem Volume Spike) | ~10-15 min | Cron 1 – hora a hora |
+| `/api/cron/run-volume-spike` | Apenas Volume Spike | ~2-4 min | Cron 2 – hora a hora |
 
-**Importante:** Use `/api/cron/run-volume-spike` para o cron-job.org. O endpoint completo pode causar 502 Bad Gateway (timeout).
+**Configuração:** Crie 2 cron jobs no cron-job.org, um para cada URL. Assim evita timeout e divide a carga.
 
 ## Horários de Execução
 
@@ -27,18 +27,21 @@ O sistema está configurado para executar automaticamente a cada hora entre 8:00
 1. Acesse: https://cron-job.org
 2. Crie uma conta gratuita
 
-### Passo 2: Criar Cron Job
-1. Clique em "Create cronjob"
-2. Configure:
-   - **Title:** Crypto Sinais - Volume Spike
-   - **Address (URL):** `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-volume-spike`
-   - **Schedule:** Custom → Cron Expression: `0 8-23 * * *`
-   - **OU** "Every hour" (de 8h até 23h)
-   - **Request method:** GET
-   - **Request headers (se CRON_SECRET configurado):**
-     ```
-     Authorization: Bearer seu-token-secreto
-     ```
+### Passo 2: Criar os 2 Cron Jobs
+
+**Cron Job 1 – Sinais (MACD, MA60, etc.):**
+- **Title:** Crypto Sinais
+- **URL:** `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-signals`
+- **Schedule:** `0 8-23 * * *` (every hour 8h–23h)
+- **Method:** GET
+- **Headers:** `Authorization: Bearer SEU_CRON_SECRET` (se configurado)
+
+**Cron Job 2 – Volume Spike:**
+- **Title:** Crypto Sinais - Volume Spike
+- **URL:** `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/run-volume-spike`
+- **Schedule:** `0 8-23 * * *` (every hour 8h–23h)
+- **Method:** GET
+- **Headers:** `Authorization: Bearer SEU_CRON_SECRET` (se configurado)
 
 ### Passo 3: Testar
 1. Clique em "Run now" para testar

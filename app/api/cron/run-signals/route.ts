@@ -3,10 +3,10 @@ import { runAllStrategies } from '@/lib/signalEngine';
 import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResults';
 
 /**
- * Endpoint de cron para executar sinais automaticamente
- * Verifica se está no horário permitido (8:00 - 23:59)
- * Executa a cada hora (8:00, 9:00, 10:00, ..., 23:00)
- * Pode ser chamado por serviços externos como cron-job.org
+ * Endpoint de cron para sinais SEM Volume Spike
+ * Volume Spike tem cron separado (/api/cron/run-volume-spike) - evita timeout
+ * Executa: MACD Histogram, MACD+PMO, MA60 Crossover
+ * Verifica horário 8:00 - 23:59
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Executar motor de sinais
-    const signalsCreated = await runAllStrategies();
+    // Executar motor de sinais (exclui Volume Spike - cron separado)
+    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE'] });
 
     // Atualizar resultados 24h
     const update24h = await update24hResults();

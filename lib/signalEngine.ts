@@ -580,17 +580,29 @@ function isAllowedTime(): boolean {
 
 
 
+export interface RunAllStrategiesOptions {
+  /** Estratégias a excluir (ex: ['VOLUME_SPIKE'] para dividir em cron separado) */
+  exclude?: string[];
+}
+
 /**
  * Função principal que executa todas as estratégias ativas
+ * @param options.exclude - Nomes de estratégias a excluir (ex: ['VOLUME_SPIKE'])
  */
-export async function runAllStrategies(): Promise<number> {
+export async function runAllStrategies(options?: RunAllStrategiesOptions): Promise<number> {
   let signalsCreated = 0;
 
   try {
     // Busca todas as estratégias ativas
-    const strategies = await prisma.strategy.findMany({
+    let strategies = await prisma.strategy.findMany({
       where: { isActive: true },
     });
+
+    // Excluir estratégias opcionais (ex: VOLUME_SPIKE em cron separado)
+    if (options?.exclude?.length) {
+      strategies = strategies.filter((s) => !options!.exclude!.includes(s.name));
+      console.log(`📋 Estratégias excluídas: ${options.exclude.join(', ')}`);
+    }
 
     if (strategies.length === 0) {
       console.log('Nenhuma estratégia ativa encontrada');
