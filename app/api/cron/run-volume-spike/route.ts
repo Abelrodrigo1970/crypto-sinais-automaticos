@@ -4,10 +4,86 @@ import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
 import { fetchTopSymbolsByVolume } from '@/lib/marketData';
 import { update24hResults } from '@/lib/update24hResults';
 
+/** Estratégia para passar ao background */
+interface StrategyData {
+  id: string;
+  displayName: string;
+}
+
+/**
+ * Executa Volume Spike em background (fire-and-forget).
+ * Permite 300 símbolos sem timeout - o cron recebe 200 OK imediato.
+ */
+async function runVolumeSpikeInBackground(
+  strategy: StrategyData,
+  params: Record<string, unknown>
+): Promise<void> {
+  const SYMBOLS = 200;
+  const DELAY_MS = 200;
+
+  try {
+    console.log(`[Volume Spike BG] Iniciando processamento de ${SYMBOLS} símbolos...`);
+    const symbols = await fetchTopSymbolsByVolume(SYMBOLS, 100000);
+    const timeframe = '1h' as const;
+    let signalsCreated = 0;
+
+    for (const symbol of symbols) {
+      try {
+        const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
+
+        if (signalResult) {
+          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+          const existingSignal = await prisma.signal.findFirst({
+            where: {
+              symbol,
+              strategyId: strategy.id,
+              timeframe,
+              direction: signalResult.direction,
+              generatedAt: { gte: twoHoursAgo },
+            },
+          });
+
+          if (!existingSignal) {
+            await prisma.signal.create({
+              data: {
+                symbol,
+                direction: signalResult.direction,
+                timeframe,
+                strategyId: strategy.id,
+                strategyName: strategy.displayName,
+                entryPrice: signalResult.entryPrice,
+                stopLoss: signalResult.stopLoss,
+                target1: signalResult.target1,
+                target2: signalResult.target2,
+                target3: signalResult.target3,
+                strength: signalResult.strength,
+                status: 'NEW',
+                extraInfo: signalResult.extraInfo,
+              },
+            });
+            signalsCreated++;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+      } catch (error) {
+        console.error(`[Volume Spike BG] Erro ${symbol}:`, error);
+      }
+    }
+
+    const update24h = await update24hResults();
+    console.log(
+      `[Volume Spike BG] Concluído: ${signalsCreated} sinais, 24h atualizados: ${update24h.updated}`
+    );
+  } catch (error) {
+    console.error('[Volume Spike BG] Erro fatal:', error);
+  }
+}
+
 /**
  * Endpoint de cron dedicado para Volume Spike
- * Otimizado para timeout 60s (cron-job.org): 100 símbolos, delay 200ms
- * Verifica horário 8:00 - 23:59, usa CRON_SECRET
+ * Resposta imediata (200 OK) - processamento em background com 300 símbolos
+ * Evita timeout 30s do cron-job.org
  */
 export async function GET(request: NextRequest) {
   try {
@@ -30,86 +106,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Buscar estratégia VOLUME_SPIKE
-    let strategy = await prisma.strategy.findFirst({
+    const strategy = await prisma.strategy.findFirst({
       where: { name: 'VOLUME_SPIKE' },
     });
 
     if (!strategy) {
-      return NextResponse.json({
-        error: 'Estratégia VOLUME_SPIKE não encontrada. Execute o seed do banco.',
-      }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Estratégia VOLUME_SPIKE não encontrada. Execute o seed do banco.' },
+        { status: 404 }
+      );
     }
 
     if (!strategy.isActive) {
-      return NextResponse.json({
-        success: false,
-        message: 'Estratégia VOLUME_SPIKE está inativa',
-      }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'Estratégia VOLUME_SPIKE está inativa' },
+        { status: 400 }
+      );
     }
 
-    const params = JSON.parse(strategy.params || '{}');
-    let signalsCreated = 0;
+    const params = JSON.parse(strategy.params || '{}') as Record<string, unknown>;
 
-    // 100 símbolos + 200ms delay = ~45-55s (evita timeout 60s)
-    const symbols = await fetchTopSymbolsByVolume(100, 100000);
-    const timeframe = '1h' as const;
-
-    for (const symbol of symbols) {
-      try {
-        const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
-
-        if (signalResult) {
-          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-          const existingSignal = await prisma.signal.findFirst({
-            where: {
-              symbol,
-              strategyId: strategy!.id,
-              timeframe,
-              direction: signalResult.direction,
-              generatedAt: { gte: twoHoursAgo },
-            },
-          });
-
-          if (!existingSignal) {
-            await prisma.signal.create({
-              data: {
-                symbol,
-                direction: signalResult.direction,
-                timeframe,
-                strategyId: strategy!.id,
-                strategyName: strategy!.displayName,
-                entryPrice: signalResult.entryPrice,
-                stopLoss: signalResult.stopLoss,
-                target1: signalResult.target1,
-                target2: signalResult.target2,
-                target3: signalResult.target3,
-                strength: signalResult.strength,
-                status: 'NEW',
-                extraInfo: signalResult.extraInfo,
-              },
-            });
-            signalsCreated++;
-          }
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      } catch (error) {
-        console.error(`Erro ao processar ${symbol}:`, error);
-      }
-    }
-
-    // Atualizar resultados 24h
-    const update24h = await update24hResults();
+    // Fire-and-forget: inicia em background, responde imediatamente
+    runVolumeSpikeInBackground(
+      { id: strategy.id, displayName: strategy.displayName },
+      params
+    );
 
     return NextResponse.json({
       success: true,
-      signalsCreated,
-      update24h: {
-        updated: update24h.updated,
-        errors: update24h.errors,
-      },
-      message: `${signalsCreated} sinal(is) Volume Spike gerado(s), ${update24h.updated} resultado(s) 24h atualizado(s)`,
+      message: 'Processamento Volume Spike iniciado em background (200 símbolos)',
       executedAt: now.toISOString(),
       nextExecution: hour < 23 ? `${hour + 1}:00` : '8:00 (amanhã)',
     });

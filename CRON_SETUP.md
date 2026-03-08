@@ -7,9 +7,9 @@ O sistema está configurado para executar automaticamente a cada hora entre 8:00
 | Endpoint | Estratégias | Tempo estimado | Cron-job.org |
 |----------|-------------|----------------|--------------|
 | `/api/cron/run-signals` | MACD Histogram, MACD+PMO, MA60 (sem Volume Spike) | ~10-15 min | Cron 1 – hora a hora |
-| `/api/cron/run-volume-spike` | Apenas Volume Spike | ~2-4 min | Cron 2 – hora a hora |
+| `/api/cron/run-volume-spike` | Volume Spike (300 símbolos, background) | Resposta imediata | Cron 2 – hora a hora |
 
-**Configuração:** Crie 2 cron jobs no cron-job.org, um para cada URL. Assim evita timeout e divide a carga.
+**Configuração:** Crie 2 cron jobs no cron-job.org. O Volume Spike responde em segundos e processa 300 símbolos em background (evita timeout 30s).
 
 ## Horários de Execução
 
