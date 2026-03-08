@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { fetchSymbolsWithMarketCap, runMa60CrossoverStrategy } from '@/lib/signalEngine';
+import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
+import { fetchTopSymbolsByVolume } from '@/lib/marketData';
 
 export async function POST(request: NextRequest) {
-  console.log('📡 Endpoint /api/run-ma60-signals chamado');
+  console.log('📡 Endpoint /api/run-ma60-signals chamado (Volume Spike)');
   try {
     // Verifica autenticação
     if (!(await isAuthenticated())) {
@@ -13,35 +14,36 @@ export async function POST(request: NextRequest) {
     }
     console.log('✅ Autenticação OK');
 
-    // Buscar estratégia MA60_CROSSOVER
-    console.log('🔍 Buscando estratégia MA60_CROSSOVER...');
+    // Buscar estratégia VOLUME_SPIKE
+    console.log('🔍 Buscando estratégia VOLUME_SPIKE...');
     let strategy = await prisma.strategy.findFirst({
       where: { 
-        name: 'MA60_CROSSOVER',
+        name: 'VOLUME_SPIKE',
       },
     });
 
     // Se não encontrou, tentar criar (caso o seed não tenha rodado)
     if (!strategy) {
-      console.log('⚠️ Estratégia MA60_CROSSOVER não encontrada. Tentando criar...');
+      console.log('⚠️ Estratégia VOLUME_SPIKE não encontrada. Tentando criar...');
       try {
         strategy = await prisma.strategy.create({
           data: {
-            name: 'MA60_CROSSOVER',
-            displayName: 'MA60 Crossover 1h',
+            name: 'VOLUME_SPIKE',
+            displayName: 'Volume Spike 1h',
             description:
-              'Gera sinais quando o preço cruza a média móvel de 60 períodos. COMPRA: preço cruza acima da MA60. VENDA: preço cruza abaixo da MA60. Timeframe 1h - sinais de hora a hora. Apenas para símbolos com market cap > 70 milhões.',
+              'Gera sinais quando o volume do último candle fechado é maior que 6 vezes a média das últimas 20 horas. COMPRA: volume spike com preço a subir. VENDA: volume spike com preço a descer. Timeframe 1h.',
             isActive: true,
             params: JSON.stringify({
-              maPeriod: 60,
+              volumeMultiplier: 6,
+              lookbackHours: 20,
             }),
           },
         });
-        console.log('✅ Estratégia MA60_CROSSOVER criada com sucesso');
+        console.log('✅ Estratégia VOLUME_SPIKE criada com sucesso');
       } catch (error) {
         console.error('❌ Erro ao criar estratégia:', error);
         return NextResponse.json({
-          error: 'Estratégia MA60_CROSSOVER não encontrada e não foi possível criar. Execute o seed do banco de dados.',
+          error: 'Estratégia VOLUME_SPIKE não encontrada e não foi possível criar. Execute o seed do banco de dados.',
           details: error instanceof Error ? error.message : 'Erro desconhecido',
         }, { status: 404 });
       }
@@ -52,27 +54,27 @@ export async function POST(request: NextRequest) {
     if (!strategy.isActive) {
       console.log('⚠️ Estratégia está inativa');
       return NextResponse.json({
-        error: 'Estratégia MA60_CROSSOVER está inativa',
+        error: 'Estratégia VOLUME_SPIKE está inativa',
       }, { status: 400 });
     }
 
     const params = JSON.parse(strategy.params || '{}');
     let signalsCreated = 0;
 
-    // Buscar símbolos com market cap > 70 milhões (como a estratégia faz)
-    const symbols = await fetchSymbolsWithMarketCap(70000000);
+    // Buscar símbolos por volume 24h (como a estratégia faz)
+    const symbols = await fetchTopSymbolsByVolume(500, 100000);
     
-    console.log(`📊 Executando estratégia MA60 para ${symbols.length} símbolos...`);
+    console.log(`📊 Executando estratégia Volume Spike para ${symbols.length} símbolos...`);
 
     // Executar apenas para timeframe 1h
     const timeframe = '1h' as const;
 
     for (const symbol of symbols) {
       try {
-        const signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
+        const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
         
         if (signalResult) {
-          console.log(`✅ MA60 sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+          console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
           
           // Verificar se já existe um sinal similar recente (dentro de 2 horas)
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
             where: {
               symbol,
               strategyId: strategy.id,
+              timeframe,
               direction: signalResult.direction,
               generatedAt: {
                 gte: twoHoursAgo,
@@ -122,18 +125,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`✅ Estratégia MA60 concluída: ${signalsCreated} novo(s) sinal(is) gerado(s)`);
+    console.log(`✅ Estratégia Volume Spike concluída: ${signalsCreated} novo(s) sinal(is) gerado(s)`);
 
     return NextResponse.json({
       success: true,
       signalsCreated,
-      message: `${signalsCreated} novo(s) sinal(is) MA60 gerado(s)`,
+      message: `${signalsCreated} novo(s) sinal(is) Volume Spike gerado(s)`,
     });
   } catch (error) {
-    console.error('Erro ao executar estratégia MA60:', error);
+    console.error('Erro ao executar estratégia Volume Spike:', error);
     return NextResponse.json(
       {
-        error: 'Ocorreu um erro ao gerar sinais MA60',
+        error: 'Ocorreu um erro ao gerar sinais Volume Spike',
         details: error instanceof Error ? error.message : 'Erro desconhecido',
       },
       { status: 500 }

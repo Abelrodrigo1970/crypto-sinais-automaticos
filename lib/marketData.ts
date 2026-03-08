@@ -294,9 +294,7 @@ export async function fetchTopSymbolsBy1hPriceChange(
       }
       if ((i + 1) % 50 === 0) await delay(100);
       else await delay(80);
-    }
-
-    results.sort((a, b) => b.changePercent1h - a.changePercent1h);
+    }    results.sort((a, b) => b.changePercent1h - a.changePercent1h);
     return results.slice(0, limit).map((r) => r.symbol);
   } catch (error) {
     console.error('Erro ao buscar símbolos por variação 1h:', error);

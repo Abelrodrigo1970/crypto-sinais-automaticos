@@ -107,14 +107,14 @@ export default function DashboardPage() {
       console.log('✅ Resposta recebida:', data);
 
       if (data.success) {
-        setMessage(data.message || `${data.signalsCreated} novo(s) sinal(is) MA60 gerado(s)`);
+        setMessage(data.message || `${data.signalsCreated} novo(s) sinal(is) Volume Spike gerado(s)`);
         fetchSignals();
       } else {
-        setMessage(data.error || 'Erro ao gerar sinais MA60');
+        setMessage(data.error || 'Erro ao gerar sinais Volume Spike');
       }
     } catch (error) {
       console.error('❌ Erro ao chamar endpoint:', error);
-      setMessage(`Erro ao gerar sinais MA60: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      setMessage(`Erro ao gerar sinais Volume Spike: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setUpdatingMa60(false);
     }
@@ -147,7 +147,7 @@ export default function DashboardPage() {
               disabled={updatingMa60 || updating}
               className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium rounded-lg transition-colors"
             >
-              {updatingMa60 ? 'Gerando MA60...' : 'Atualizar MA60'}
+              {updatingMa60 ? 'Gerando Volume Spike...' : 'Atualizar Volume Spike'}
             </button>
             <button
               onClick={handleUpdateSignals}
