@@ -12,13 +12,13 @@ interface StrategyData {
 
 /**
  * Executa Volume Spike em background (fire-and-forget).
- * Permite 300 símbolos sem timeout - o cron recebe 200 OK imediato.
+ * 400 símbolos, apenas sinais BUY. Resposta imediata.
  */
 async function runVolumeSpikeInBackground(
   strategy: StrategyData,
   params: Record<string, unknown>
 ): Promise<void> {
-  const SYMBOLS = 200;
+  const SYMBOLS = 400;
   const DELAY_MS = 200;
 
   try {
@@ -31,7 +31,8 @@ async function runVolumeSpikeInBackground(
       try {
         const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
 
-        if (signalResult) {
+        // Apenas sinais de compra
+        if (signalResult && signalResult.direction === 'BUY') {
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
           const existingSignal = await prisma.signal.findFirst({
             where: {
@@ -82,7 +83,7 @@ async function runVolumeSpikeInBackground(
 
 /**
  * Endpoint de cron dedicado para Volume Spike
- * Resposta imediata (200 OK) - processamento em background com 300 símbolos
+ * Resposta imediata - 400 símbolos, apenas compra
  * Evita timeout 30s do cron-job.org
  */
 export async function GET(request: NextRequest) {
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Processamento Volume Spike iniciado em background (200 símbolos)',
+      message: 'Processamento Volume Spike iniciado em background (400 símbolos, apenas compra)',
       executedAt: now.toISOString(),
       nextExecution: hour < 23 ? `${hour + 1}:00` : '8:00 (amanhã)',
     });
