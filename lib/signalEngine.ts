@@ -4,10 +4,13 @@
 
 import { prisma } from './db';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
+import { createEntrySignals } from './multiTimeframeStrategy';
+import { runScanner } from './scanner';
 import {
   calculateSMA,
   calculateMACD,
   calculatePMO,
+  calculateRSI,
   getCloses,
   getVolumes,
   calculateVolumeMA,
@@ -525,6 +528,179 @@ export async function runVolumeSpikeStrategy(
 }
 
 /**
+ * Estratégia RSI: Sobrecomprado (SELL) ou Sobrevendido (BUY)
+ * RSI > overbought (70) = SELL, RSI < oversold (30) = BUY
+ * Timeframe 1h
+ */
+export async function runRsiStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '1h') return null;
+
+  const period = params.period || 14;
+  const overbought = params.overbought || 70;
+  const oversold = params.oversold || 30;
+
+  try {
+    const candles = await fetchCandles(symbol, timeframe, period + 20);
+    if (candles.length < period + 2) return null;
+
+    const closes = getCloses(candles);
+    const rsi = calculateRSI(closes, period);
+    if (rsi === null) return null;
+
+    const currentPrice = candles[candles.length - 1].close;
+
+    if (rsi < oversold) {
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice * 0.96,
+        target1: currentPrice * 1.20,
+        target2: currentPrice * 1.20,
+        target3: currentPrice * 1.20,
+        strength: Math.min(100, Math.max(60, Math.round(60 + (oversold - rsi) * 2))),
+        extraInfo: JSON.stringify({ rsi: rsi.toFixed(2), oversold, period }),
+      };
+    }
+    if (rsi > overbought) {
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice * 1.04,
+        target1: currentPrice * 0.80,
+        target2: currentPrice * 0.80,
+        target3: currentPrice * 0.80,
+        strength: Math.min(100, Math.max(60, Math.round(60 + (rsi - overbought) * 2))),
+        extraInfo: JSON.stringify({ rsi: rsi.toFixed(2), overbought, period }),
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia RSI para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Estratégia PMO: Cruzamento da linha zero
+ * PMO cruza acima de zero = BUY, cruza abaixo = SELL
+ * Timeframe 4h, horários: 8h, 12h, 16h, 20h, 23h
+ */
+export async function runPmoStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '4h') return null;
+  if (!isAllowedTime()) return null;
+
+  const pmoFirst = params.rocPeriod || 35;
+  const pmoSecond = params.emaFast || 20;
+
+  try {
+    const candles = await fetchCandles(symbol, timeframe, pmoFirst + pmoSecond + 30);
+    if (candles.length < pmoFirst + pmoSecond + 10) return null;
+
+    const closes = getCloses(candles);
+    const pmo = calculatePMO(closes, pmoFirst, pmoSecond);
+    const prevCloses = closes.slice(0, -1);
+    const prevPmo = calculatePMO(prevCloses, pmoFirst, pmoSecond);
+
+    if (pmo === null || prevPmo === null) return null;
+
+    const currentPrice = candles[candles.length - 1].close;
+
+    if (prevPmo < 0 && pmo > 0) {
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice * 0.96,
+        target1: currentPrice * 1.20,
+        target2: currentPrice * 1.20,
+        target3: currentPrice * 1.20,
+        strength: Math.min(100, Math.max(60, Math.round(60 + Math.abs(pmo) * 20))),
+        extraInfo: JSON.stringify({ pmo: pmo.toFixed(4), prevPmo: prevPmo.toFixed(4) }),
+      };
+    }
+    if (prevPmo > 0 && pmo < 0) {
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice * 1.04,
+        target1: currentPrice * 0.80,
+        target2: currentPrice * 0.80,
+        target3: currentPrice * 0.80,
+        strength: Math.min(100, Math.max(60, Math.round(60 + Math.abs(pmo) * 20))),
+        extraInfo: JSON.stringify({ pmo: pmo.toFixed(4), prevPmo: prevPmo.toFixed(4) }),
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia PMO para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Estratégia Multi-Timeframe (4H + 1H): Regime RANGE/TREND com entradas Bollinger ou Breakout+Reteste
+ * Timeframe 1h (avalia no 1H com contexto 4H)
+ */
+export async function runMultiTimeframeStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  _params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '1h') return null;
+
+  try {
+    const candles1H = await fetchCandles(symbol, '1h', 250);
+    const candles4H = await fetchCandles(symbol, '4h', 80);
+    if (candles1H.length < 150 || candles4H.length < 60) return null;
+
+    const { evaluate } = createEntrySignals(candles1H, candles4H);
+    const i1H = candles1H.length - 1;
+    const signal = evaluate(i1H);
+
+    if (signal.type === 'NONE') return null;
+
+    const currentPrice = candles1H[i1H].close;
+    const atr = 0.02 * currentPrice;
+
+    if (signal.type === 'LONG') {
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice - atr * 2,
+        target1: currentPrice + atr * 3,
+        target2: currentPrice + atr * 4,
+        target3: currentPrice + atr * 5,
+        strength: 70,
+        extraInfo: JSON.stringify({ reason: signal.reason, regime: signal.regime4H, bias: signal.bias4H }),
+      };
+    }
+    if (signal.type === 'SHORT') {
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss: currentPrice + atr * 2,
+        target1: currentPrice - atr * 3,
+        target2: currentPrice - atr * 4,
+        target3: currentPrice - atr * 5,
+        strength: 70,
+        extraInfo: JSON.stringify({ reason: signal.reason, regime: signal.regime4H, bias: signal.bias4H }),
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia Multi-Timeframe para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
  * Busca símbolos da Binance com market cap superior a 70 milhões
  * Usa CoinGecko API para obter market cap real
  */
@@ -647,6 +823,57 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
         }
       }
 
+      // SCANNER_APLUS: execução especial (tem seu próprio loop de símbolos)
+      if (strategy.name === 'SCANNER_APLUS') {
+        try {
+          const scannerConfig = {
+            topSymbolsLimit: params.topSymbolsLimit || 50,
+            minQuoteVolume: params.minQuoteVolume || 1000000,
+            minScore: params.minEntryScore ?? params.minScore ?? 8.5,
+            topResultsLimit: params.topNAlerts || 10,
+            enableBreakoutRetest: params.enableBreakoutRetest !== false,
+            cooldownMinutes: params.cooldownMinutes || 120,
+          };
+          const { entries } = await runScanner(scannerConfig);
+          for (const alert of entries) {
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+            const existing = await prisma.signal.findFirst({
+              where: {
+                symbol: alert.symbol,
+                strategyId: strategy.id,
+                timeframe: '15m',
+                direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
+                generatedAt: { gte: twoHoursAgo },
+              },
+            });
+            if (!existing) {
+              await prisma.signal.create({
+                data: {
+                  symbol: alert.symbol,
+                  direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
+                  timeframe: '15m',
+                  strategyId: strategy.id,
+                  strategyName: strategy.displayName,
+                  entryPrice: alert.entry,
+                  stopLoss: alert.stop,
+                  target1: alert.t1,
+                  target2: alert.t2,
+                  target3: alert.t2,
+                  strength: Math.min(100, Math.round(alert.score * 10)),
+                  status: 'NEW',
+                  extraInfo: JSON.stringify({ setup: alert.setup, reasons: alert.reasons }),
+                },
+              });
+              signalsCreated++;
+              console.log(`✅ Scanner A+ sinal: ${alert.symbol} ${alert.side}`);
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao executar SCANNER_APLUS:', err);
+        }
+        continue;
+      }
+
       for (const symbol of symbolsToAnalyze) {
         for (const timeframe of timeframes) {
           try {
@@ -670,6 +897,24 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
                 if (signalResult) {
                   console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'RSI':
+                signalResult = await runRsiStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ RSI sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'PMO':
+                signalResult = await runPmoStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ PMO sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'MULTI_TIMEFRAME':
+                signalResult = await runMultiTimeframeStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ Multi-Timeframe sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
                 }
                 break;
               default:
