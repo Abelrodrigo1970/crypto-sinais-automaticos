@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
       where.timeframe = timeframe;
     }
     if (strategy) {
-      where.strategyName = { contains: strategy };
+      // Se for ID (cuid ~25 chars), filtrar por strategyId; senão por strategyName (compat texto)
+      if (strategy.length >= 20 && /^[a-z0-9]+$/i.test(strategy)) {
+        where.strategyId = strategy;
+      } else {
+        where.strategyName = { contains: strategy };
+      }
     }
     // Aplicar filtro de força apenas se especificado (removido padrão para teste)
     if (minStrength) {

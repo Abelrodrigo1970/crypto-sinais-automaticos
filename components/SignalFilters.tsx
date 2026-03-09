@@ -97,7 +97,7 @@ export default function SignalFilters({
             >
               <option value="">Todas</option>
               {strategies.map((s) => (
-                <option key={s.id} value={s.displayName}>
+                <option key={s.id} value={s.id}>
                   {s.displayName}
                 </option>
               ))}
@@ -105,7 +105,7 @@ export default function SignalFilters({
           ) : (
             <input
               type="text"
-              placeholder="Volume Spike, MA200, RSI..."
+              placeholder="Volume Spike, MA60, RSI..."
               value={filters.strategy}
               onChange={(e) => onFilterChange({ ...filters, strategy: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"

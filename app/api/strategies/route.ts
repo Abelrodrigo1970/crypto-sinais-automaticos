@@ -4,10 +4,7 @@ import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
+    // Listagem pública - necessário para o dropdown de filtros no dashboard
     const strategies = await prisma.strategy.findMany({
       orderBy: { name: 'asc' },
     });
