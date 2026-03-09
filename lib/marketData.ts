@@ -57,23 +57,37 @@ export async function fetchCandles(
 
 /**
  * Busca o preço atual de um par (Futures USDⓈ-M)
+ * Retry em caso de Bad Request/erro temporário da API
  */
-export async function fetchCurrentPrice(symbol: string): Promise<number> {
-  try {
-    const response = await fetch(
-      `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`
-    );
+export async function fetchCurrentPrice(symbol: string, retries = 2): Promise<number> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(
+        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`
+      );
 
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar preço: ${response.statusText}`);
+      if (!response.ok) {
+        if (response.status === 400 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`Erro ao buscar preço: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return parseFloat(data.price);
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      } else {
+        console.error(`Erro ao buscar preço para ${symbol}:`, error);
+        throw error;
+      }
     }
-
-    const data = await response.json();
-    return parseFloat(data.price);
-  } catch (error) {
-    console.error(`Erro ao buscar preço para ${symbol}:`, error);
-    throw error;
   }
+  throw lastError;
 }
 
 /**

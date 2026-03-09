@@ -1,9 +1,13 @@
 /**
  * Inicialização do banco de dados no startup da aplicação
  * Roda automaticamente quando o módulo é importado
+ * Usa import dinâmico para evitar dependência circular com db.ts
  */
 
-import { prisma } from './db';
+async function getPrisma() {
+  const { prisma } = await import('./db');
+  return prisma;
+}
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
@@ -14,6 +18,8 @@ export async function ensureDatabase() {
   if (dbInitialized) {
     return true;
   }
+
+  const prisma = await getPrisma();
 
   try {
     const databaseUrl = process.env.DATABASE_URL || '';
