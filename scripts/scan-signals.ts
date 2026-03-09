@@ -46,7 +46,7 @@ const STRATEGIES: StrategyDef[] = [
     displayName: 'MA60 Crossover',
     getSymbols: async () => (await fetchSymbolsWithMarketCap(70000000)).slice(0, MA60_SYMBOLS),
     timeframes: ['1h'],
-    getParams: () => ({ maPeriod: 60 }),
+    getParams: () => ({ maPeriod: 200 }),
     run: runMa60CrossoverStrategy,
   },
   {

@@ -295,7 +295,8 @@ export async function runMa60CrossoverStrategy(
     return null;
   }
 
-  const maPeriod = params.maPeriod || 200;
+  // Sempre usar MA200 - ignorar params (evita maPeriod:60 no banco antigo)
+  const maPeriod = 200;
   const ma200Period = 200; // Filtro de tendência
 
   try {
