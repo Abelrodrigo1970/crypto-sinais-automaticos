@@ -1,5 +1,11 @@
 'use client';
 
+interface StrategyOption {
+  id: string;
+  name: string;
+  displayName: string;
+}
+
 interface SignalFiltersProps {
   filters: {
     symbol: string;
@@ -10,12 +16,14 @@ interface SignalFiltersProps {
   };
   onFilterChange: (filters: any) => void;
   onReset: () => void;
+  strategies?: StrategyOption[];
 }
 
 export default function SignalFilters({
   filters,
   onFilterChange,
   onReset,
+  strategies = [],
 }: SignalFiltersProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6 border border-gray-200 dark:border-gray-700">
@@ -81,13 +89,28 @@ export default function SignalFilters({
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Estratégia
           </label>
-          <input
-            type="text"
-            placeholder="RSI, MA..."
-            value={filters.strategy}
-            onChange={(e) => onFilterChange({ ...filters, strategy: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
+          {strategies.length > 0 ? (
+            <select
+              value={filters.strategy}
+              onChange={(e) => onFilterChange({ ...filters, strategy: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Todas</option>
+              {strategies.map((s) => (
+                <option key={s.id} value={s.displayName}>
+                  {s.displayName}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              placeholder="Volume Spike, MA200, RSI..."
+              value={filters.strategy}
+              onChange={(e) => onFilterChange({ ...filters, strategy: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          )}
         </div>
 
         <div>

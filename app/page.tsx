@@ -22,8 +22,15 @@ interface Signal {
   generatedAt: string;
 }
 
+interface Strategy {
+  id: string;
+  name: string;
+  displayName: string;
+}
+
 export default function DashboardPage() {
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [updatingMa60, setUpdatingMa60] = useState(false);
@@ -64,6 +71,22 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  const fetchStrategies = async () => {
+    try {
+      const res = await fetch('/api/strategies');
+      const data = await res.json();
+      if (res.ok && data.strategies) {
+        setStrategies(data.strategies);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar estratégias:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchStrategies();
+  }, []);
 
   useEffect(() => {
     fetchSignals();
@@ -175,6 +198,7 @@ export default function DashboardPage() {
           filters={filters}
           onFilterChange={handleFilterChange}
           onReset={handleResetFilters}
+          strategies={strategies}
         />
 
         {loading ? (

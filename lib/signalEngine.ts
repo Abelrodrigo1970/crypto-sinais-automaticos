@@ -795,6 +795,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
     }
 
     const timeframes: Timeframe[] = ['1h', '4h'];
+    const unknownStrategiesLogged = new Set<string>();
 
     for (const strategy of strategies) {
 
@@ -917,8 +918,14 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                   console.log(`✅ Multi-Timeframe sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
                 }
                 break;
+              case 'SCANNER_APLUS':
+                // Processado no bloco especial acima - não deve chegar aqui
+                break;
               default:
-                console.warn(`Estratégia desconhecida: ${strategy.name}`);
+                if (!unknownStrategiesLogged.has(strategy.name)) {
+                  unknownStrategiesLogged.add(strategy.name);
+                  console.warn(`Estratégia desconhecida (ignorada): ${strategy.name}`);
+                }
                 continue;
             }
 
