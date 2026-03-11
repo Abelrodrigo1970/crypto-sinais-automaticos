@@ -3,27 +3,48 @@ import { runAllStrategies } from '@/lib/signalEngine';
 import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResults';
 
 /**
+ * Executa sinais em background (fire-and-forget).
+ * Evita timeout 502 - Railway/proxy timeout ~60-120s, processamento leva ~10-15 min.
+ */
+async function runSignalsInBackground(hour: number, minute: number): Promise<void> {
+  try {
+    console.log('[Run-Signals BG] Iniciando MACD, MACD+PMO, MA60...');
+    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE'] });
+
+    const update24h = await update24hResults();
+
+    let updateHighLow = { updated: 0, errors: 0 };
+    if (hour === 8 && minute < 10) {
+      updateHighLow = await updateMissingHighLow24h();
+    }
+
+    console.log(
+      `[Run-Signals BG] Concluído: ${signalsCreated} sinais, 24h: ${update24h.updated}, high/low: ${updateHighLow.updated}`
+    );
+  } catch (error) {
+    console.error('[Run-Signals BG] Erro fatal:', error);
+  }
+}
+
+/**
  * Endpoint de cron para sinais SEM Volume Spike
- * Volume Spike tem cron separado (/api/cron/run-volume-spike) - evita timeout
+ * Volume Spike tem cron separado (/api/cron/run-volume-spike)
+ * Resposta imediata - processamento em background evita timeout 502
  * Executa: MACD Histogram, MACD+PMO, MA60 Crossover
- * Verifica horário 8:00 - 23:59
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verificar se tem token de segurança (opcional, mas recomendado)
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    
+
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Obter hora atual (UTC ou timezone configurado)
     const now = new Date();
     const hour = now.getHours();
     const minute = now.getMinutes();
 
-    // Verificar se está no horário permitido (8:00 - 23:59)
     if (hour < 8 || hour > 23) {
       return NextResponse.json({
         success: false,
@@ -32,30 +53,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Executar motor de sinais (exclui Volume Spike - cron separado)
-    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE'] });
-
-    // Atualizar resultados 24h
-    const update24h = await update24hResults();
-
-    // Atualizar sinais já fechados que não têm high24h/low24h (apenas uma vez por dia às 8:00)
-    let updateHighLow = { updated: 0, errors: 0 };
-    if (hour === 8 && minute < 10) {
-      updateHighLow = await updateMissingHighLow24h();
-    }
+    // Fire-and-forget: responde imediatamente, processa em background
+    runSignalsInBackground(hour, minute);
 
     return NextResponse.json({
       success: true,
-      signalsCreated,
-      update24h: {
-        updated: update24h.updated,
-        errors: update24h.errors,
-      },
-      updateHighLow: {
-        updated: updateHighLow.updated,
-        errors: updateHighLow.errors,
-      },
-      message: `${signalsCreated} novo(s) sinal(is) gerado(s), ${update24h.updated} resultado(s) 24h atualizado(s)${updateHighLow.updated > 0 ? `, ${updateHighLow.updated} high/low atualizado(s)` : ''}`,
+      message: 'Processamento iniciado em background (MACD, MACD+PMO, MA60)',
       executedAt: now.toISOString(),
       nextExecution: hour < 23 ? `${hour + 1}:00` : '8:00 (amanhã)',
     });
