@@ -5,6 +5,7 @@
 
 import {
   fetchTopSymbolsBy1hPriceChange,
+  fetchTopSymbolsBy24hPriceChange,
   fetchTopSymbolsByVolume,
   type Timeframe,
 } from '../lib/marketData';
@@ -36,7 +37,7 @@ const STRATEGIES: StrategyDef[] = [
   {
     name: 'VOLUME_SPIKE',
     displayName: 'Volume Spike',
-    getSymbols: () => fetchTopSymbolsByVolume(VOLUME_SYMBOLS, 100000),
+    getSymbols: () => fetchTopSymbolsBy24hPriceChange(VOLUME_SYMBOLS, 100000),
     timeframes: ['1h'],
     getParams: () => ({ volumeMultiplier: 6, lookbackHours: 20 }),
     run: runVolumeSpikeStrategy,

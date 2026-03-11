@@ -1,9 +1,9 @@
 /**
  * Script para testar a estratégia VOLUME_SPIKE
- * Testa RLSUSDT e outros símbolos por volume 24h; mostra volume do último candle fechado vs média.
+ * Testa RLSUSDT e outros símbolos por % 24h; mostra volume do último candle fechado vs média.
  */
 
-import { fetchCandles, fetchTopSymbolsByVolume } from '../lib/marketData';
+import { fetchCandles, fetchTopSymbolsBy24hPriceChange } from '../lib/marketData';
 import { getVolumes, calculateVolumeMA } from '../lib/indicators';
 import { runVolumeSpikeStrategy } from '../lib/signalEngine';
 
@@ -36,13 +36,13 @@ async function getVolumeStats(symbol: string) {
 async function main() {
   console.log('🔍 Testando estratégia VOLUME_SPIKE (candle FECHADO vs média 20h)\n');
 
-  // Incluir sempre RLSUSDT e buscar top por volume
-  const symbolsByVolume = await fetchTopSymbolsByVolume(50, 500000);
+  // Incluir sempre RLSUSDT e buscar top por % 24h
+  const symbolsByChange = await fetchTopSymbolsBy24hPriceChange(50, 500000);
   const symbolsToTest = Array.from(
-    new Set(['RLSUSDT', 'BTCUSDT', 'ETHUSDT', ...symbolsByVolume])
+    new Set(['RLSUSDT', 'BTCUSDT', 'ETHUSDT', ...symbolsByChange])
   ).slice(0, 30);
 
-  console.log(`📊 Símbolos a testar: ${symbolsToTest.length} (inclui RLSUSDT e top por volume 24h)\n`);
+  console.log(`📊 Símbolos a testar: ${symbolsToTest.length} (inclui RLSUSDT e top por % 24h)\n`);
   console.log('═'.repeat(100));
 
   let signalsFound = 0;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
-import { fetchTopSymbolsByVolume } from '@/lib/marketData';
+import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
 import { update24hResults } from '@/lib/update24hResults';
 
 /** Estratégia para passar ao background */
@@ -23,7 +23,7 @@ async function runVolumeSpikeInBackground(
 
   try {
     console.log(`[Volume Spike BG] Iniciando processamento de ${SYMBOLS} símbolos...`);
-    const symbols = await fetchTopSymbolsByVolume(SYMBOLS, 100000);
+    const symbols = await fetchTopSymbolsBy24hPriceChange(SYMBOLS, 100000);
     const timeframe = '1h' as const;
     let signalsCreated = 0;
 

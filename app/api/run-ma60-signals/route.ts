@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
-import { fetchTopSymbolsByVolume } from '@/lib/marketData';
+import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
 
 export async function POST(request: NextRequest) {
   console.log('📡 Endpoint /api/run-ma60-signals chamado (Volume Spike)');
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
     const params = JSON.parse(strategy.params || '{}');
     let signalsCreated = 0;
 
-    // Buscar símbolos por volume 24h (como a estratégia faz)
-    const symbols = await fetchTopSymbolsByVolume(500, 100000);
+    // Buscar símbolos por % variação 24h
+    const symbols = await fetchTopSymbolsBy24hPriceChange(500, 100000);
     
     console.log(`📊 Executando estratégia Volume Spike para ${symbols.length} símbolos...`);
 

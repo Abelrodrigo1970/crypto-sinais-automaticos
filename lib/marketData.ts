@@ -252,6 +252,50 @@ export async function fetchTopSymbolsByVolume(
   }
 }
 
+/**
+ * Busca os top N símbolos USDT perpetual por variação percentual de preço 24h
+ * Ordena por priceChangePercent (maior subida primeiro)
+ * @param limit Número máximo de símbolos (padrão: 50)
+ * @param minQuoteVolume Volume mínimo em USDT para filtrar pares mortos (padrão: 0)
+ */
+export async function fetchTopSymbolsBy24hPriceChange(
+  limit: number = 50,
+  minQuoteVolume: number = 0
+): Promise<string[]> {
+  try {
+    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
+
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar dados: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    const usdtPairs = data
+      .filter((ticker: any) => {
+        return (
+          ticker.symbol.endsWith('USDT') &&
+          !ticker.symbol.includes('BUSD') &&
+          parseFloat(ticker.quoteVolume) >= minQuoteVolume
+        );
+      })
+      .map((ticker: any) => ({
+        symbol: ticker.symbol,
+        priceChangePercent: parseFloat(ticker.priceChangePercent || '0'),
+      }));
+
+    // Ordenar por priceChangePercent decrescente (maior subida primeiro)
+    const sorted = usdtPairs.sort((a: any, b: any) => {
+      return b.priceChangePercent - a.priceChangePercent;
+    });
+
+    return sorted.slice(0, limit).map((item: any) => item.symbol);
+  } catch (error) {
+    console.error('Erro ao buscar top símbolos por % 24h:', error);
+    throw error;
+  }
+}
+
 /** Atraso em ms (evitar rate limit da Binance) */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

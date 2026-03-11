@@ -3,7 +3,7 @@
  */
 
 import { prisma } from './db';
-import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
+import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsBy24hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import { runScanner } from './scanner';
 import {
@@ -815,13 +815,13 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           console.warn('⚠️  Nenhum símbolo com market cap > 70 milhões encontrado, usando lista padrão');
         }
       } else if (strategy.name === 'VOLUME_SPIKE') {
-        const maxVolumeSymbols = 500;
+        const maxSymbols = 500;
         const minQuoteVolume = 100000; // volume mínimo para evitar pares mortos
-        console.log('🔍 Buscando símbolos por volume 24h para estratégia VOLUME_SPIKE...');
-        const volumeSymbols = await fetchTopSymbolsByVolume(maxVolumeSymbols, minQuoteVolume);
+        console.log('🔍 Buscando símbolos por % variação 24h para estratégia VOLUME_SPIKE...');
+        const volumeSymbols = await fetchTopSymbolsBy24hPriceChange(maxSymbols, minQuoteVolume);
         if (volumeSymbols.length > 0) {
           symbolsToAnalyze = volumeSymbols;
-          console.log(`✅ Encontrados ${volumeSymbols.length} símbolos (top por volume 24h)`);
+          console.log(`✅ Encontrados ${volumeSymbols.length} símbolos (top por % 24h)`);
         }
       }
 
