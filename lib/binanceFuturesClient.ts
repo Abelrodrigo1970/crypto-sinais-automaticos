@@ -167,3 +167,14 @@ export async function getLotSizeStep(symbol: string): Promise<number> {
   const step = lotFilter?.stepSize ?? '0.001';
   return parseFloat(step);
 }
+
+/**
+ * Obtém tick size para arredondar preço (PRICE_FILTER).
+ */
+export async function getTickSize(symbol: string): Promise<number> {
+  const info = await getExchangeInfo(symbol);
+  const sym = info.symbols?.find((s) => s.symbol === symbol);
+  const priceFilter = sym?.filters?.find((f: Record<string, string>) => f.filterType === 'PRICE_FILTER');
+  const tick = priceFilter?.tickSize ?? '0.01';
+  return parseFloat(tick);
+}

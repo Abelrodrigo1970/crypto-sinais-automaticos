@@ -78,10 +78,34 @@ export function calculateQuantity(
  * Ex: step 0.001 → 0.1234567 vira 0.123
  */
 export function roundQuantity(quantity: number, stepSize: number): string {
-  const precision = stepSize >= 1 ? 0 : stepSize.toString().split('.')[1]?.length ?? 8;
-  const factor = 10 ** precision;
+  const precision = getStepPrecision(stepSize);
   const rounded = Math.floor(quantity / stepSize) * stepSize;
-  return rounded.toFixed(precision);
+  return formatPrecision(rounded, precision);
+}
+
+/**
+ * Arredonda preço para o tick size da Binance (PRICE_FILTER).
+ */
+export function roundPrice(price: number, tickSize: number): string {
+  const precision = getStepPrecision(tickSize);
+  const rounded = Math.round(price / tickSize) * tickSize;
+  return formatPrecision(rounded, precision);
+}
+
+function getStepPrecision(step: number): number {
+  if (step >= 1) return 0;
+  const str = step.toString();
+  if (str.includes('e')) {
+    const [, exp] = str.split('e');
+    return Math.abs(parseInt(exp, 10));
+  }
+  const dec = str.split('.')[1];
+  return dec?.length ?? 8;
+}
+
+function formatPrecision(value: number, precision: number): string {
+  if (precision <= 0) return String(Math.round(value));
+  return value.toFixed(precision);
 }
 
 /**

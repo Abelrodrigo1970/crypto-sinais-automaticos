@@ -8,6 +8,7 @@ import {
   canExecuteSignal,
   getExecutionParams,
   roundQuantity,
+  roundPrice,
   type SignalForTrading,
 } from './tradingRules';
 import {
@@ -19,6 +20,7 @@ import {
   createOrder,
   createAlgoOrder,
   getLotSizeStep,
+  getTickSize,
 } from './binanceFuturesClient';
 
 export interface ExecuteResult {
@@ -130,10 +132,15 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
   }
 
   try {
-    const stepSize = await getLotSizeStep(signal.symbol);
+    const [stepSize, tickSize] = await Promise.all([
+      getLotSizeStep(signal.symbol),
+      getTickSize(signal.symbol),
+    ]);
     const qty = typeof params.quantity === 'number' ? params.quantity : 0;
     const step = Number.isFinite(stepSize) && stepSize > 0 ? stepSize : 0.001;
+    const tick = Number.isFinite(tickSize) && tickSize > 0 ? tickSize : 0.01;
     const qtyStr = roundQuantity(qty, step);
+    const triggerPriceStr = roundPrice(signal.stopLoss, tick);
 
     const entryOrder = await createOrder({
       symbol: signal.symbol,
@@ -149,7 +156,7 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
         symbol: signal.symbol,
         side: slSide,
         type: 'STOP_MARKET',
-        triggerPrice: String(signal.stopLoss),
+        triggerPrice: triggerPriceStr,
         closePosition: true,
       });
       stopOrderId = stopOrder.algoId;
