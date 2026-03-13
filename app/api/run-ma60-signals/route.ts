@@ -3,6 +3,7 @@ import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
 import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
+import { executeSignalReal } from '@/lib/tradingExecutor';
 
 export async function POST(request: NextRequest) {
   console.log('📡 Endpoint /api/run-ma60-signals chamado (Volume Spike)');
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Criar o sinal
-          await prisma.signal.create({
+          const created = await prisma.signal.create({
             data: {
               symbol,
               direction: signalResult.direction,
@@ -115,6 +116,34 @@ export async function POST(request: NextRequest) {
           });
 
           signalsCreated++;
+
+          // Execução automática: força > 90 (sem confirmação)
+          if (signalResult.strength > 90) {
+            executeSignalReal({
+              id: created.id,
+              symbol: created.symbol,
+              direction: created.direction as 'BUY' | 'SELL',
+              entryPrice: created.entryPrice,
+              stopLoss: created.stopLoss,
+              target1: created.target1,
+              target2: created.target2,
+              target3: created.target3 ?? undefined,
+              strength: created.strength,
+              strategyName: created.strategyName,
+              status: created.status,
+            })
+              .then(async (result) => {
+                if (result.success && result.orderId) {
+                  await prisma.$executeRaw`UPDATE "Signal" SET status = 'IN_PROGRESS' WHERE id = ${created.id}`;
+                  console.log(`[Volume Spike] ✅ Auto-executado: ${created.symbol} order ${result.orderId}`);
+                } else {
+                  console.warn(`[Volume Spike] ⚠️ Auto-exec falhou ${created.symbol}: ${result.message}`);
+                }
+              })
+              .catch((err) => {
+                console.error(`[Volume Spike] ❌ Erro auto-exec ${created.symbol}:`, err);
+              });
+          }
         }
         
         // Pequeno delay para não sobrecarregar a API
