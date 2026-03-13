@@ -40,7 +40,7 @@ export default function DashboardPage() {
     direction: '',
     timeframe: '',
     strategy: '',
-    minStrength: '40',
+    minStrength: '70',
   });
 
   const fetchSignals = async () => {
@@ -153,7 +153,7 @@ export default function DashboardPage() {
       direction: '',
       timeframe: '',
       strategy: '',
-      minStrength: '0', // 0 = sem filtro
+      minStrength: '70', // Padrão: apenas força >= 70
     });
   };
 

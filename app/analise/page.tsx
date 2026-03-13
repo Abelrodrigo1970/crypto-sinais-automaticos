@@ -160,7 +160,7 @@ export default function AnalisePage() {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('limit', '1000');
-      params.append('minStrength', '40');
+      params.append('minStrength', '70');
       params.append('onlyClosed', 'true');
 
       const response = await fetch(`/api/signals?${params.toString()}`);

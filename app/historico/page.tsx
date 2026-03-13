@@ -45,7 +45,7 @@ export default function HistoricoPage() {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('limit', '500');
-      params.append('minStrength', '40'); // Filtro padrão de strength > 40
+      params.append('minStrength', '70'); // Apenas sinais com força >= 70
       if (filters.symbol) params.append('symbol', filters.symbol);
       if (filters.direction) params.append('direction', filters.direction);
       if (filters.strategy) params.append('strategy', filters.strategy);

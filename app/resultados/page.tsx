@@ -53,7 +53,7 @@ export default function ResultadosPage() {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('limit', '1000');
-      params.append('minStrength', '40');
+      params.append('minStrength', '70');
       params.append('onlyClosed', 'true'); // Buscar apenas sinais com resultado 24h
       if (filters.symbol) params.append('symbol', filters.symbol);
       if (filters.direction) params.append('direction', filters.direction);

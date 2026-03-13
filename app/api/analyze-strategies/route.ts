@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       where: {
         status24h: 'CLOSED',
         result24h: { not: null },
-        strength: { gte: 40 },
+        strength: { gte: 70 },
       },
       include: {
         strategy: true,

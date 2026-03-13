@@ -31,8 +31,8 @@ async function runVolumeSpikeInBackground(
       try {
         const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
 
-        // Apenas sinais de compra
-        if (signalResult && signalResult.direction === 'BUY') {
+        // Apenas sinais de compra com força >= 70
+        if (signalResult && signalResult.direction === 'BUY' && signalResult.strength >= 70) {
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
           const existingSignal = await prisma.signal.findFirst({
             where: {

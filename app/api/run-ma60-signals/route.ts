@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
       try {
         const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
         
-        if (signalResult) {
-          console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+        if (signalResult && signalResult.strength >= 70) {
+          console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe}) força ${signalResult.strength}`);
           
           // Verificar se já existe um sinal similar recente (dentro de 2 horas)
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);

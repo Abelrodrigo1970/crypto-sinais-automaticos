@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const direction = searchParams.get('direction');
     const timeframe = searchParams.get('timeframe');
     const strategy = searchParams.get('strategy');
-    const minStrength = searchParams.get('minStrength');
+    const minStrengthParam = searchParams.get('minStrength');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const onlyOpen = searchParams.get('onlyOpen') === 'true';
@@ -51,9 +51,11 @@ export async function GET(request: NextRequest) {
         where.strategyName = { contains: strategy };
       }
     }
-    // Aplicar filtro de força apenas se especificado (removido padrão para teste)
-    if (minStrength) {
-      const minStrengthValue = parseInt(minStrength);
+    // Filtro de força: padrão 70 (apenas sinais com força >= 70). Passar minStrength=0 para ver todos.
+    const minStrengthValue = minStrengthParam !== null && minStrengthParam !== ''
+      ? parseInt(minStrengthParam, 10)
+      : 70;
+    if (!isNaN(minStrengthValue)) {
       where.strength = { gte: minStrengthValue };
     }
     
