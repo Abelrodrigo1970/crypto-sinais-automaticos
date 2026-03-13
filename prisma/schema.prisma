@@ -45,8 +45,7 @@ model Signal {
   status24h    String?  // "CLOSED" quando já passaram 24h, null caso contrário
   high24h       Float?   // Preço mais alto durante as 24 horas
   low24h        Float?   // Preço mais baixo durante as 24 horas
-  executedAt    DateTime? // Quando a ordem foi executada pelo bot
-  executionOrderId String? // ID da ordem na Binance
+  // executedAt e executionOrderId removidos - BD sem essas colunas (adicionar depois via migration)
 
   strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
 

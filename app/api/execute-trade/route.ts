@@ -94,10 +94,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success && result.orderId) {
-      await prisma.signal.update({
-        where: { id: signalId },
-        data: { status: 'IN_PROGRESS' },
-      });
+      // Raw update to avoid Prisma selecting columns (executedAt, executionOrderId) that may not exist in DB
+      await prisma.$executeRaw`UPDATE "Signal" SET status = 'IN_PROGRESS' WHERE id = ${signalId}`;
       return NextResponse.json({
         success: true,
         message: result.message,

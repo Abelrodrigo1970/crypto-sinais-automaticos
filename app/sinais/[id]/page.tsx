@@ -23,8 +23,8 @@ interface Signal {
   status: string;
   generatedAt: string;
   extraInfo: string | null;
-  executedAt: string | null;
-  executionOrderId: string | null;
+  executedAt?: string | null;
+  executionOrderId?: string | null;
 }
 
 export default function SignalDetailPage() {
