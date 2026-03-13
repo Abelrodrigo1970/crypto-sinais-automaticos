@@ -65,8 +65,6 @@ export async function POST(request: NextRequest) {
         strength: true,
         strategyName: true,
         status: true,
-        executedAt: true,
-        executionOrderId: true,
       },
     });
 
@@ -74,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sinal não encontrado' }, { status: 404 });
     }
 
-    if (signal.executedAt) {
+    if (signal.status === 'IN_PROGRESS') {
       return NextResponse.json(
         { success: false, error: 'Sinal já executado' },
         { status: 400 }
@@ -96,14 +94,21 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success && result.orderId) {
-      await prisma.signal.update({
-        where: { id: signalId },
-        data: {
-          executedAt: new Date(),
-          executionOrderId: String(result.orderId),
-          status: 'IN_PROGRESS',
-        },
-      });
+      try {
+        await prisma.signal.update({
+          where: { id: signalId },
+          data: {
+            status: 'IN_PROGRESS',
+            executedAt: new Date(),
+            executionOrderId: String(result.orderId),
+          },
+        });
+      } catch (e) {
+        await prisma.signal.update({
+          where: { id: signalId },
+          data: { status: 'IN_PROGRESS' },
+        });
+      }
       return NextResponse.json({
         success: true,
         message: result.message,

@@ -328,12 +328,12 @@ export default function SignalDetailPage() {
               )}
               {signal.target3 && (
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Target 3</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Target 3 (fechar 24h)</p>
                   <p className="text-xl font-bold text-green-600 dark:text-green-400">
                     ${formatPrice(signal.target3)}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    +{calculateDistance(signal.target3, signal.entryPrice, signal.direction).toFixed(2)}%
+                    +{calculateDistance(signal.target3, signal.entryPrice, signal.direction).toFixed(2)}% · Fechar às 24h
                   </p>
                 </div>
               )}

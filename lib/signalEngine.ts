@@ -466,12 +466,12 @@ export async function runVolumeSpikeStrategy(
     const priceChange = currentPrice - prevPrice;
     const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
 
-    // Calcular stop loss e targets
+    // Calcular stop loss e targets: TP1 10%, TP2 20%, TP3 fecha às 24h (usa TP2 como ref)
     if (direction === 'BUY') {
       const stopLoss = currentPrice * 0.96; // 4% abaixo
-      const target1 = currentPrice * 1.20; // 20% acima
-      const target2 = currentPrice * 1.20;
-      const target3 = currentPrice * 1.20;
+      const target1 = currentPrice * 1.10; // 10% acima
+      const target2 = currentPrice * 1.20; // 20% acima
+      const target3 = currentPrice * 1.20; // TP3 = fechar às 24h (mesmo preço que TP2)
 
       // Força baseada no múltiplo de volume (quanto maior, mais forte)
       const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
@@ -496,9 +496,9 @@ export async function runVolumeSpikeStrategy(
       };
     } else {
       const stopLoss = currentPrice * 1.04; // 4% acima
-      const target1 = currentPrice * 0.80; // 20% abaixo
-      const target2 = currentPrice * 0.80;
-      const target3 = currentPrice * 0.80;
+      const target1 = currentPrice * 0.90; // 10% abaixo
+      const target2 = currentPrice * 0.80; // 20% abaixo
+      const target3 = currentPrice * 0.80; // TP3 = fechar às 24h
 
       // Força baseada no múltiplo de volume
       const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
