@@ -92,6 +92,18 @@ export function roundPrice(price: number, tickSize: number): string {
   return formatPrecision(rounded, precision);
 }
 
+/**
+ * Arredonda stop loss: BUY=floor (abaixo), SELL=ceil (acima) para garantir 5% correto.
+ */
+export function roundPriceStopLoss(price: number, tickSize: number, direction: 'BUY' | 'SELL'): string {
+  const precision = getStepPrecision(tickSize);
+  const mult = price / tickSize;
+  const rounded = direction === 'BUY'
+    ? Math.floor(mult) * tickSize  // stop abaixo: não arredondar para cima
+    : Math.ceil(mult) * tickSize;  // stop acima: não arredondar para baixo
+  return formatPrecision(rounded, precision);
+}
+
 function getStepPrecision(step: number): number {
   if (step >= 1) return 0;
   const str = step.toString();

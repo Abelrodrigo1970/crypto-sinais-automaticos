@@ -9,6 +9,7 @@ import {
   getExecutionParams,
   roundQuantity,
   roundPrice,
+  roundPriceStopLoss,
   type SignalForTrading,
 } from './tradingRules';
 import {
@@ -140,7 +141,7 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
     const step = Number.isFinite(stepSize) && stepSize > 0 ? stepSize : 0.001;
     const tick = Number.isFinite(tickSize) && tickSize > 0 ? tickSize : 0.01;
     const qtyStr = roundQuantity(qty, step);
-    const triggerPriceStr = roundPrice(signal.stopLoss, tick);
+    const triggerPriceStr = roundPriceStopLoss(signal.stopLoss, tick, signal.direction);
 
     const entryOrder = await createOrder({
       symbol: signal.symbol,
@@ -174,6 +175,7 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
     const tps = params.takeProfits ?? [];
     const totalQty = qty;
     const tpPercents = [0.5, 0.3]; // TP1, TP2 - TP3 é às 24h, não colocamos ordem
+    const tpErrors: string[] = [];
     for (let i = 0; i < Math.min(tps.length, 2); i++) {
       const tp = tps[i];
       if (!tp || tp.price === signal.entryPrice) continue;
@@ -189,19 +191,24 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
           type: 'TAKE_PROFIT_MARKET',
           triggerPrice: tpTriggerStr,
           quantity: tpQtyStr,
+          reduceOnly: true,
         });
         console.log(`[TradingExecutor] TP${i + 1} (${tp.label}): ${tpQtyStr} @ ${tpTriggerStr} | algo: ${tpOrder.algoId}`);
       } catch (tpErr) {
+        const msg = tpErr instanceof Error ? tpErr.message : String(tpErr);
+        tpErrors.push(`TP${i + 1}: ${msg}`);
         console.warn(`[TradingExecutor] Erro ao criar TP${i + 1}:`, tpErr);
       }
     }
 
+    const tpWarning = tpErrors.length > 0 ? ` (TP não colocados: ${tpErrors.join('; ')})` : '';
+
     return {
       success: true,
       dryRun: false,
-      message: stopOrderId
+      message: (stopOrderId
         ? `Trade executado: ${signal.symbol} ${signal.direction} order ${entryOrder.orderId}`
-        : `Entrada executada: ${signal.symbol} ${signal.direction}. Stop loss já existia para este par.`,
+        : `Entrada executada: ${signal.symbol} ${signal.direction}. Stop loss já existia para este par.`) + tpWarning,
       params,
       orderId: entryOrder.orderId,
       stopOrderId,

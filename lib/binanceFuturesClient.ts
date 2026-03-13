@@ -142,6 +142,7 @@ export async function createAlgoOrder(params: {
   closePosition?: boolean;
   quantity?: string;
   workingType?: 'MARK_PRICE' | 'CONTRACT_PRICE';
+  reduceOnly?: boolean;
 }): Promise<{ algoId: number; symbol: string; algoStatus: string }> {
   const p: Record<string, string> = {
     algoType: 'CONDITIONAL',
@@ -153,6 +154,7 @@ export async function createAlgoOrder(params: {
   if (params.closePosition) p.closePosition = 'true';
   if (params.quantity && !params.closePosition) p.quantity = params.quantity;
   if (params.workingType) p.workingType = params.workingType;
+  if (params.reduceOnly && !params.closePosition) p.reduceOnly = 'true';
 
   return signedRequest('POST', '/fapi/v1/algoOrder', p);
 }
