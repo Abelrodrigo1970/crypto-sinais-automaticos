@@ -143,23 +143,35 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
     });
 
     const slSide = signal.direction === 'BUY' ? 'SELL' : 'BUY';
-    const stopOrder = await createAlgoOrder({
-      symbol: signal.symbol,
-      side: slSide,
-      type: 'STOP_MARKET',
-      triggerPrice: String(signal.stopLoss),
-      closePosition: true,
-    });
-
-    console.log(`[TradingExecutor] Ordem entrada: ${entryOrder.orderId} | Stop Loss algo: ${stopOrder.algoId}`);
+    let stopOrderId: number | undefined;
+    try {
+      const stopOrder = await createAlgoOrder({
+        symbol: signal.symbol,
+        side: slSide,
+        type: 'STOP_MARKET',
+        triggerPrice: String(signal.stopLoss),
+        closePosition: true,
+      });
+      stopOrderId = stopOrder.algoId;
+      console.log(`[TradingExecutor] Ordem entrada: ${entryOrder.orderId} | Stop Loss algo: ${stopOrderId}`);
+    } catch (slError: unknown) {
+      const slMsg = slError instanceof Error ? slError.message : String(slError);
+      if (slMsg.includes('closePosition') && slMsg.includes('existing')) {
+        console.log(`[TradingExecutor] Stop loss já existe para ${signal.symbol}, entrada OK: ${entryOrder.orderId}`);
+      } else {
+        throw slError;
+      }
+    }
 
     return {
       success: true,
       dryRun: false,
-      message: `Trade executado: ${signal.symbol} ${signal.direction} order ${entryOrder.orderId}`,
+      message: stopOrderId
+        ? `Trade executado: ${signal.symbol} ${signal.direction} order ${entryOrder.orderId}`
+        : `Entrada executada: ${signal.symbol} ${signal.direction}. Stop loss já existia para este par.`,
       params,
       orderId: entryOrder.orderId,
-      stopOrderId: stopOrder.algoId,
+      stopOrderId,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
