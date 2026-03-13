@@ -94,21 +94,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success && result.orderId) {
-      try {
-        await prisma.signal.update({
-          where: { id: signalId },
-          data: {
-            status: 'IN_PROGRESS',
-            executedAt: new Date(),
-            executionOrderId: String(result.orderId),
-          },
-        });
-      } catch (e) {
-        await prisma.signal.update({
-          where: { id: signalId },
-          data: { status: 'IN_PROGRESS' },
-        });
-      }
+      await prisma.signal.update({
+        where: { id: signalId },
+        data: { status: 'IN_PROGRESS' },
+      });
       return NextResponse.json({
         success: true,
         message: result.message,
