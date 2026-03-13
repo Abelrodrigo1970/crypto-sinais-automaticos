@@ -14,7 +14,31 @@ export async function GET(
 
     const signal = await prisma.signal.findUnique({
       where: { id: params.id },
-      include: { strategy: true },
+      select: {
+        id: true,
+        symbol: true,
+        direction: true,
+        timeframe: true,
+        strategyId: true,
+        strategyName: true,
+        entryPrice: true,
+        stopLoss: true,
+        target1: true,
+        target2: true,
+        target3: true,
+        strength: true,
+        status: true,
+        generatedAt: true,
+        lastCheckedAt: true,
+        extraInfo: true,
+        price24h: true,
+        result24h: true,
+        status24h: true,
+        high24h: true,
+        low24h: true,
+        // executedAt/executionOrderId omitidos se BD não tiver
+        strategy: true,
+      },
     });
 
     if (!signal) {

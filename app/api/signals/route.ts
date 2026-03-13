@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const onlyOpen = searchParams.get('onlyOpen') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '1000', 10) || 1000, 5000);
 
     const where: any = {};
 
@@ -85,11 +85,35 @@ export async function GET(request: NextRequest) {
       where.result24h = { not: null };
     }
 
+    // Select explícito: omite executedAt/executionOrderId para funcionar em BD
+    // que ainda não tenha essas colunas (ex: Railway antes de db push)
     const signals = await prisma.signal.findMany({
       where,
       orderBy: { generatedAt: 'desc' },
-      take: limit,
-      include: {
+      take: Math.min(limit || 1000, 5000),
+      select: {
+        id: true,
+        symbol: true,
+        direction: true,
+        timeframe: true,
+        strategyId: true,
+        strategyName: true,
+        entryPrice: true,
+        stopLoss: true,
+        target1: true,
+        target2: true,
+        target3: true,
+        strength: true,
+        status: true,
+        generatedAt: true,
+        lastCheckedAt: true,
+        extraInfo: true,
+        price24h: true,
+        result24h: true,
+        status24h: true,
+        high24h: true,
+        low24h: true,
+        // executedAt/executionOrderId omitidos para BD sem essas colunas
         strategy: true,
       },
     });
