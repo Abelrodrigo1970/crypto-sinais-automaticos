@@ -121,8 +121,8 @@ export function getStopLossOrderParams(signal: SignalForTrading) {
 }
 
 /**
- * TP1 = 50% da posição, TP2 = 30%, TP3 = 20% (fechar às 24h).
- * Retorna os preços para ordens de Take Profit.
+ * TP1 = 50% da posição, TP2 = 30%, TP3 = 20% (fechar às 24h - sem ordem).
+ * Retorna apenas TP1 e TP2 para ordens na Binance.
  */
 export function getTakeProfitLevels(signal: SignalForTrading): Array<{
   price: number;
@@ -131,13 +131,13 @@ export function getTakeProfitLevels(signal: SignalForTrading): Array<{
 }> {
   const tp1 = signal.target1 ?? signal.entryPrice;
   const tp2 = signal.target2 ?? signal.entryPrice;
-  const tp3 = signal.target3 ?? signal.entryPrice;
 
-  return [
+  const levels = [
     { price: tp1, percentOfPosition: 50, label: 'TP1' },
     { price: tp2, percentOfPosition: 30, label: 'TP2' },
-    { price: tp3, percentOfPosition: 20, label: 'TP3' },
   ];
+  // TP3 = fechar às 24h (preço de mercado), não colocamos ordem
+  return levels;
 }
 
 /**
