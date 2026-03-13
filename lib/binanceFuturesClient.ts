@@ -108,20 +108,15 @@ export async function getExchangeInfo(symbol?: string): Promise<{
 }
 
 /**
- * Nova ordem.
- * type: MARKET, LIMIT, STOP_MARKET, TAKE_PROFIT_MARKET
- * Para STOP_MARKET com closePosition=true não enviar quantity.
+ * Nova ordem (MARKET, LIMIT). STOP_MARKET usa createAlgoOrder.
  */
 export async function createOrder(params: {
   symbol: string;
   side: 'BUY' | 'SELL';
-  type: 'MARKET' | 'LIMIT' | 'STOP_MARKET' | 'TAKE_PROFIT_MARKET';
+  type: 'MARKET' | 'LIMIT';
   quantity?: string;
   price?: string;
   timeInForce?: 'GTC' | 'IOC' | 'FOK';
-  stopPrice?: string;
-  reduceOnly?: boolean;
-  closePosition?: boolean;
 }): Promise<{ orderId: number; symbol: string; status: string }> {
   const p: Record<string, string> = {
     symbol: params.symbol,
@@ -131,11 +126,35 @@ export async function createOrder(params: {
   if (params.quantity) p.quantity = params.quantity;
   if (params.price) p.price = params.price;
   if (params.timeInForce) p.timeInForce = params.timeInForce;
-  if (params.stopPrice) p.stopPrice = params.stopPrice;
-  if (params.reduceOnly !== undefined) p.reduceOnly = String(params.reduceOnly);
-  if (params.closePosition !== undefined) p.closePosition = String(params.closePosition);
 
   return signedRequest('POST', '/fapi/v1/order', p);
+}
+
+/**
+ * Ordem Algo (STOP_MARKET, TAKE_PROFIT_MARKET).
+ * Binance migrou STOP_MARKET para /fapi/v1/algoOrder.
+ */
+export async function createAlgoOrder(params: {
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  type: 'STOP_MARKET' | 'TAKE_PROFIT_MARKET';
+  triggerPrice: string;
+  closePosition?: boolean;
+  quantity?: string;
+  workingType?: 'MARK_PRICE' | 'CONTRACT_PRICE';
+}): Promise<{ algoId: number; symbol: string; algoStatus: string }> {
+  const p: Record<string, string> = {
+    algoType: 'CONDITIONAL',
+    symbol: params.symbol,
+    side: params.side,
+    type: params.type,
+    triggerPrice: params.triggerPrice,
+  };
+  if (params.closePosition) p.closePosition = 'true';
+  if (params.quantity && !params.closePosition) p.quantity = params.quantity;
+  if (params.workingType) p.workingType = params.workingType;
+
+  return signedRequest('POST', '/fapi/v1/algoOrder', p);
 }
 
 /**

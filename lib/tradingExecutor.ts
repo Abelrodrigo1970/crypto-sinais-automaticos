@@ -17,6 +17,7 @@ import {
 } from './binanceConfig';
 import {
   createOrder,
+  createAlgoOrder,
   getLotSizeStep,
 } from './binanceFuturesClient';
 
@@ -142,15 +143,15 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
     });
 
     const slSide = signal.direction === 'BUY' ? 'SELL' : 'BUY';
-    const stopOrder = await createOrder({
+    const stopOrder = await createAlgoOrder({
       symbol: signal.symbol,
       side: slSide,
       type: 'STOP_MARKET',
-      stopPrice: String(signal.stopLoss),
+      triggerPrice: String(signal.stopLoss),
       closePosition: true,
     });
 
-    console.log(`[TradingExecutor] Ordem entrada: ${entryOrder.orderId} | Stop Loss: ${stopOrder.orderId}`);
+    console.log(`[TradingExecutor] Ordem entrada: ${entryOrder.orderId} | Stop Loss algo: ${stopOrder.algoId}`);
 
     return {
       success: true,
@@ -158,7 +159,7 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
       message: `Trade executado: ${signal.symbol} ${signal.direction} order ${entryOrder.orderId}`,
       params,
       orderId: entryOrder.orderId,
-      stopOrderId: stopOrder.orderId,
+      stopOrderId: stopOrder.algoId,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
