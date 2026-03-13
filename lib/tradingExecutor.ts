@@ -170,6 +170,32 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
       }
     }
 
+    // Take Profit: TP1 50%, TP2 30% (TP3 = fechar às 24h, sem ordem na Binance)
+    const tps = params.takeProfits ?? [];
+    const totalQty = qty;
+    const tpPercents = [0.5, 0.3]; // TP1, TP2 - TP3 é às 24h, não colocamos ordem
+    for (let i = 0; i < Math.min(tps.length, 2); i++) {
+      const tp = tps[i];
+      if (!tp || tp.price === signal.entryPrice) continue;
+      const tpQty = totalQty * tpPercents[i];
+      if (tpQty <= 0) continue;
+      const tpQtyStr = roundQuantity(tpQty, step);
+      if (parseFloat(tpQtyStr) <= 0) continue;
+      const tpTriggerStr = roundPrice(tp.price, tick);
+      try {
+        const tpOrder = await createAlgoOrder({
+          symbol: signal.symbol,
+          side: slSide,
+          type: 'TAKE_PROFIT_MARKET',
+          triggerPrice: tpTriggerStr,
+          quantity: tpQtyStr,
+        });
+        console.log(`[TradingExecutor] TP${i + 1} (${tp.label}): ${tpQtyStr} @ ${tpTriggerStr} | algo: ${tpOrder.algoId}`);
+      } catch (tpErr) {
+        console.warn(`[TradingExecutor] Erro ao criar TP${i + 1}:`, tpErr);
+      }
+    }
+
     return {
       success: true,
       dryRun: false,

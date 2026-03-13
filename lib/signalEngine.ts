@@ -468,7 +468,7 @@ export async function runVolumeSpikeStrategy(
 
     // Calcular stop loss e targets: TP1 10%, TP2 20%, TP3 fecha às 24h (usa TP2 como ref)
     if (direction === 'BUY') {
-      const stopLoss = currentPrice * 0.96; // 4% abaixo
+      const stopLoss = currentPrice * 0.95; // 5% abaixo
       const target1 = currentPrice * 1.10; // 10% acima
       const target2 = currentPrice * 1.20; // 20% acima
       const target3 = currentPrice * 1.20; // TP3 = fechar às 24h (mesmo preço que TP2)
@@ -495,7 +495,7 @@ export async function runVolumeSpikeStrategy(
         }),
       };
     } else {
-      const stopLoss = currentPrice * 1.04; // 4% acima
+      const stopLoss = currentPrice * 1.05; // 5% acima (SELL: stop acima da entrada)
       const target1 = currentPrice * 0.90; // 10% abaixo
       const target2 = currentPrice * 0.80; // 20% abaixo
       const target3 = currentPrice * 0.80; // TP3 = fechar às 24h
