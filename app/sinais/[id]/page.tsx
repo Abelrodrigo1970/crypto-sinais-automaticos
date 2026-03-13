@@ -23,6 +23,8 @@ interface Signal {
   status: string;
   generatedAt: string;
   extraInfo: string | null;
+  executedAt: string | null;
+  executionOrderId: string | null;
 }
 
 export default function SignalDetailPage() {
@@ -30,12 +32,36 @@ export default function SignalDetailPage() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tradingStatus, setTradingStatus] = useState<{
+    canExecute: boolean;
+    reason?: string;
+    isTestnet?: boolean;
+  } | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [executeResult, setExecuteResult] = useState<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (params.id) {
       fetchSignal();
     }
   }, [params.id]);
+
+  useEffect(() => {
+    fetch('/api/execute-trade')
+      .then((res) => res.json())
+      .then((data) =>
+        setTradingStatus({
+          canExecute: data.canExecute ?? false,
+          reason: data.reason,
+          isTestnet: data.isTestnet,
+        })
+      )
+      .catch(() => setTradingStatus({ canExecute: false }));
+  }, []);
 
   const fetchSignal = async () => {
     try {
@@ -63,6 +89,30 @@ export default function SignalDetailPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('pt-BR');
+  };
+
+  const handleExecuteTrade = async () => {
+    if (!signal || !tradingStatus?.canExecute) return;
+    setExecuting(true);
+    setExecuteResult(null);
+    try {
+      const res = await fetch('/api/execute-trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signalId: signal.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setExecuteResult({ success: true, message: data.message });
+        fetchSignal();
+      } else {
+        setExecuteResult({ success: false, error: data.error || data.message || 'Erro ao executar' });
+      }
+    } catch (e) {
+      setExecuteResult({ success: false, error: 'Erro de conexão' });
+    } finally {
+      setExecuting(false);
+    }
   };
 
   const calculateDistance = (target: number, entry: number, direction: string) => {
@@ -198,6 +248,58 @@ export default function SignalDetailPage() {
               </div>
             </div>
           </div>
+
+          {tradingStatus && (
+            <div className="mb-8 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Bot de Trading
+              </h2>
+              {signal.executedAt && (
+                <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+                  ✅ Executado em {formatDate(signal.executedAt)}
+                  {signal.executionOrderId && ` (order ${signal.executionOrderId})`}
+                </p>
+              )}
+              {tradingStatus.canExecute && !signal.executedAt && signal.status === 'NEW' && (
+                <>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Testnet ativo. Podes executar este sinal na Binance Futures Testnet.
+                  </p>
+                  <button
+                    onClick={handleExecuteTrade}
+                    disabled={executing || signal.strength < 70}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  >
+                    {executing ? 'A executar...' : 'Executar trade'}
+                  </button>
+                  {signal.strength < 70 && (
+                    <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                      Apenas sinais com força ≥ 70 podem ser executados.
+                    </p>
+                  )}
+                </>
+              )}
+              {!tradingStatus.canExecute && !signal.executedAt && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {tradingStatus.reason ?? 'Trading desativado ou não configurado.'}
+                </p>
+              )}
+              {!signal.executedAt && signal.status !== 'NEW' && tradingStatus.canExecute && (
+                <p className="text-sm text-gray-500">Este sinal já não está em estado NEW.</p>
+              )}
+              {executeResult && (
+                <div
+                  className={`mt-3 p-3 rounded text-sm ${
+                    executeResult.success
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                  }`}
+                >
+                  {executeResult.success ? executeResult.message : executeResult.error}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Targets</h2>
