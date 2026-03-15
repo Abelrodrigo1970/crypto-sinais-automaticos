@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 import DirectionTag from '@/components/DirectionTag';
-import StatusTag from '@/components/StatusTag';
 
 interface Signal {
   id: string;
@@ -16,7 +15,7 @@ interface Signal {
   stopLoss: number;
   target1: number | null;
   strength: number;
-  status: string;
+  status?: string;
   generatedAt: string;
   price24h: number | null;
   result24h: number | null;
@@ -84,19 +83,9 @@ export default function HistoricoPage() {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   };
 
-  const getResultText = (signal: Signal) => {
-    switch (signal.status) {
-      case 'HIT_TARGET':
-        return 'Target atingido';
-      case 'HIT_STOP':
-        return 'Stop atingido';
-      case 'EXPIRED':
-        return 'Expirado';
-      case 'IN_PROGRESS':
-        return 'Em andamento';
-      default:
-        return 'Novo';
-    }
+  const getVariationPercent = (signal: Signal): number | null => {
+    if (signal.status24h !== 'CLOSED' || signal.result24h === null || !signal.entryPrice) return null;
+    return (signal.result24h / signal.entryPrice) * 100;
   };
 
   return (
@@ -238,8 +227,17 @@ export default function HistoricoPage() {
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         ${formatPrice(signal.entryPrice)}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        <StatusTag status={signal.status} />
+                      <td className="px-2 py-2 whitespace-nowrap text-sm font-medium">
+                        {(() => {
+                          const pct = getVariationPercent(signal);
+                          if (pct === null) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+                          const isPositive = pct >= 0;
+                          return (
+                            <span className={isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                              {isPositive ? '+' : ''}{pct.toFixed(2)}%
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm">
                         {signal.status24h === 'CLOSED' && signal.price24h !== null && signal.result24h !== null ? (
