@@ -466,11 +466,11 @@ export async function runVolumeSpikeStrategy(
     const priceChange = currentPrice - prevPrice;
     const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
 
-    // Calcular stop loss e targets: TP1 10%, TP2 20%, TP3 = fechar às 24h (preço de mercado)
+    // Calcular stop loss e targets: TP1 9%, TP2 20%, 25% às 24h (preço de mercado)
     if (direction === 'BUY') {
       const stopLoss = currentPrice * 0.95; // 5% abaixo
-      const target1 = currentPrice * 1.10; // 10% acima
-      const target2 = currentPrice * 1.20; // 20% acima
+      const target1 = currentPrice * 1.09; // 9% acima
+      const target2 = currentPrice * 1.25; // 25% acima
       // TP3 = fechar às 24h ao preço que estiver (sem ordem na Binance)
       const target3: number | undefined = undefined;
 
@@ -497,8 +497,8 @@ export async function runVolumeSpikeStrategy(
       };
     } else {
       const stopLoss = currentPrice * 1.05; // 5% acima (SELL: stop acima da entrada)
-      const target1 = currentPrice * 0.90; // 10% abaixo
-      const target2 = currentPrice * 0.80; // 20% abaixo
+      const target1 = currentPrice * 0.91; // 9% abaixo
+      const target2 = currentPrice * 0.75; // 25% abaixo
       const target3: number | undefined = undefined; // TP3 = fechar às 24h ao preço que estiver
 
       // Força baseada no múltiplo de volume
