@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
                 stopLoss: created.stopLoss,
                 target1: created.target1,
                 target2: created.target2,
-                target3: created.target3 ?? undefined,
+                target3: created.target3 ?? null,
                 strength: created.strength,
                 strategyName: created.strategyName,
                 status: created.status,
