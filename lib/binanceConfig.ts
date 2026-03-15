@@ -31,3 +31,9 @@ export function getPositionSizeUsdt(): number {
   const val = parseFloat(process.env.POSITION_SIZE_USDT || '100');
   return Number.isFinite(val) && val > 0 ? val : 100;
 }
+
+/** Força mínima para execução automática (sem confirmação). Default 80 para haver ordens automáticas. */
+export function getAutoExecuteMinStrength(): number {
+  const val = parseInt(process.env.AUTO_EXECUTE_MIN_STRENGTH || '80', 10);
+  return Number.isFinite(val) && val >= 70 && val <= 100 ? val : 80;
+}

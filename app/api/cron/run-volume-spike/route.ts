@@ -4,6 +4,7 @@ import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
 import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
 import { update24hResults } from '@/lib/update24hResults';
 import { executeSignalReal } from '@/lib/tradingExecutor';
+import { getAutoExecuteMinStrength } from '@/lib/binanceConfig';
 
 /** Estratégia para passar ao background */
 interface StrategyData {
@@ -65,32 +66,34 @@ async function runVolumeSpikeInBackground(
             });
             signalsCreated++;
 
-            // Execução automática: força > 90 (sem confirmação)
-            if (signalResult.strength > 90) {
-              executeSignalReal({
-                id: created.id,
-                symbol: created.symbol,
-                direction: created.direction as 'BUY' | 'SELL',
-                entryPrice: created.entryPrice,
-                stopLoss: created.stopLoss,
-                target1: created.target1,
-                target2: created.target2,
-                target3: created.target3 ?? undefined,
-                strength: created.strength,
-                strategyName: created.strategyName,
-                status: created.status,
-              })
-                .then(async (result) => {
-                  if (result.success && result.orderId) {
-                    await prisma.$executeRaw`UPDATE "Signal" SET status = 'IN_PROGRESS' WHERE id = ${created.id}`;
-                    console.log(`[Volume Spike BG] ✅ Auto-executado: ${created.symbol} order ${result.orderId}`);
-                  } else {
-                    console.warn(`[Volume Spike BG] ⚠️ Auto-exec falhou ${created.symbol}: ${result.message}`);
-                  }
-                })
-                .catch((err) => {
-                  console.error(`[Volume Spike BG] ❌ Erro auto-exec ${created.symbol}:`, err);
+            // Execução automática: força >= AUTO_EXECUTE_MIN_STRENGTH (default 80)
+            // Awaited para que a ordem seja enviada antes do processo terminar (serverless)
+            const autoMinStrength = getAutoExecuteMinStrength();
+            if (signalResult.strength >= autoMinStrength) {
+              console.log(`[Volume Spike BG] 🚀 Auto-exec: ${symbol} força ${signalResult.strength} (>= ${autoMinStrength})`);
+              try {
+                const result = await executeSignalReal({
+                  id: created.id,
+                  symbol: created.symbol,
+                  direction: created.direction as 'BUY' | 'SELL',
+                  entryPrice: created.entryPrice,
+                  stopLoss: created.stopLoss,
+                  target1: created.target1,
+                  target2: created.target2,
+                  target3: created.target3 ?? undefined,
+                  strength: created.strength,
+                  strategyName: created.strategyName,
+                  status: created.status,
                 });
+                if (result.success && result.orderId) {
+                  await prisma.$executeRaw`UPDATE "Signal" SET status = 'IN_PROGRESS' WHERE id = ${created.id}`;
+                  console.log(`[Volume Spike BG] ✅ Auto-executado: ${created.symbol} order ${result.orderId}`);
+                } else {
+                  console.warn(`[Volume Spike BG] ⚠️ Auto-exec falhou ${created.symbol}: ${result.message}`);
+                }
+              } catch (err) {
+                console.error(`[Volume Spike BG] ❌ Erro auto-exec ${created.symbol}:`, err);
+              }
             }
           }
         }
