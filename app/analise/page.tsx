@@ -118,6 +118,7 @@ interface AnalysisStats {
     high24h: number;
     maxPercent: number;
     resultPercent: number;
+    strength: number;
     hour: number;
     generatedAt: string;
   }>;
@@ -129,6 +130,7 @@ interface AnalysisStats {
     low24h: number;
     maxPercent: number;
     resultPercent: number;
+    strength: number;
     hour: number;
     generatedAt: string;
   }>;
@@ -150,10 +152,12 @@ export default function AnalisePage() {
   const [signals, setSignals] = useState<SignalWithResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<AnalysisStats | null>(null);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
   useEffect(() => {
     fetchSignals();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const fetchSignals = async () => {
     try {
@@ -162,6 +166,8 @@ export default function AnalisePage() {
       params.append('limit', '1000');
       params.append('minStrength', '70');
       params.append('onlyClosed', 'true');
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
 
       const response = await fetch(`/api/signals?${params.toString()}`);
       const data = await response.json();
@@ -372,6 +378,7 @@ export default function AnalisePage() {
           high24h: signal.high24h!,
           maxPercent: maxPercent!,
           resultPercent,
+          strength: signal.strength,
           hour: date.getHours(),
           generatedAt: signal.generatedAt,
         };
@@ -390,6 +397,7 @@ export default function AnalisePage() {
           low24h: signal.low24h!,
           maxPercent: maxPercent!,
           resultPercent,
+          strength: signal.strength,
           hour: date.getHours(),
           generatedAt: signal.generatedAt,
         };
@@ -485,6 +493,38 @@ export default function AnalisePage() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           Análise Completa de Trades
         </h1>
+
+        {/* Filtro de datas para estatísticas */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-8 border border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Filtro de período</h2>
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data inicial</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data final</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md"
+            >
+              Limpar datas
+            </button>
+          </div>
+        </div>
 
         {/* Trades de Compra por Percentual - Max24h */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-8 border border-gray-200 dark:border-gray-700">
@@ -659,6 +699,7 @@ export default function AnalisePage() {
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Máx 24h</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">% Máx</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">% Resultado</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Força</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Hora</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data/Hora</th>
                 </tr>
@@ -693,6 +734,9 @@ export default function AnalisePage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                        {trade.strength}
+                      </td>
+                      <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
                         {trade.hour}h
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
@@ -703,7 +747,7 @@ export default function AnalisePage() {
                 })}
                 {stats.topTradesByMax.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan={9} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhum trade encontrado
                     </td>
                   </tr>
@@ -728,6 +772,7 @@ export default function AnalisePage() {
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Mín 24h</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">% Máx</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">% Resultado</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Força</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Hora</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data/Hora</th>
                 </tr>
@@ -762,6 +807,9 @@ export default function AnalisePage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                        {trade.strength}
+                      </td>
+                      <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
                         {trade.hour}h
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
@@ -772,7 +820,7 @@ export default function AnalisePage() {
                 })}
                 {stats.topSellTradesByMax.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <td colSpan={9} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhum trade encontrado
                     </td>
                   </tr>
