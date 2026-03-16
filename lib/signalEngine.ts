@@ -530,6 +530,108 @@ export async function runVolumeSpikeStrategy(
 }
 
 /**
+ * Estratégia Volume Spike 15m: igual ao Volume Spike 1h mas em 15m com 15 períodos
+ * Gera sinais quando volume do último candle 15m fechado é maior que 6x a média dos últimos 15 candles
+ */
+export async function runVolumeSpike15mStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '15m') {
+    return null;
+  }
+
+  const volumeMultiplier = params.volumeMultiplier || 6;
+  const lookbackPeriods = params.lookbackPeriods ?? 15;
+
+  try {
+    const candlesNeeded = lookbackPeriods + 5;
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+
+    if (candles.length < lookbackPeriods + 2) {
+      return null;
+    }
+
+    const volumes = getVolumes(candles);
+    const lastClosedIndex = volumes.length - 2;
+    const currentVolume = volumes[lastClosedIndex];
+
+    const volumesForAverage = volumes.slice(-lookbackPeriods - 2, -2);
+    const volumeAverage = calculateVolumeMA(volumesForAverage, lookbackPeriods);
+
+    if (volumeAverage === null || volumeAverage === 0) {
+      return null;
+    }
+
+    const volumeRatio = currentVolume / volumeAverage;
+    if (volumeRatio < volumeMultiplier) {
+      return null;
+    }
+
+    const currentPrice = candles[lastClosedIndex].close;
+    const prevPrice = candles[lastClosedIndex - 1].close;
+    const priceChange = currentPrice - prevPrice;
+    const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
+
+    if (direction === 'BUY') {
+      const stopLoss = currentPrice * 0.87;
+      const target1 = currentPrice * 1.09;
+      const target2 = currentPrice * 1.25;
+      const target3: number | undefined = undefined;
+      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          currentVolume: currentVolume.toFixed(2),
+          volumeAverage: volumeAverage.toFixed(2),
+          volumeRatio: volumeRatio.toFixed(2),
+          volumeMultiplier,
+          lookbackPeriods,
+          priceChange: priceChange.toFixed(4),
+          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
+        }),
+      };
+    } else {
+      const stopLoss = currentPrice * 1.13;
+      const target1 = currentPrice * 0.91;
+      const target2 = currentPrice * 0.75;
+      const target3: number | undefined = undefined;
+      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          currentVolume: currentVolume.toFixed(2),
+          volumeAverage: volumeAverage.toFixed(2),
+          volumeRatio: volumeRatio.toFixed(2),
+          volumeMultiplier,
+          lookbackPeriods,
+          priceChange: priceChange.toFixed(4),
+          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
+        }),
+      };
+    }
+  } catch (error) {
+    console.error(`Erro na estratégia Volume Spike 15m para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
  * Estratégia RSI: Sobrecomprado (SELL) ou Sobrevendido (BUY)
  * RSI > overbought (70) = SELL, RSI < oversold (30) = BUY
  * Timeframe 1h
@@ -803,6 +905,10 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
 
       const params = JSON.parse(strategy.params || '{}');
 
+      // VOLUME_SPIKE_15M usa apenas timeframe 15m
+      const timeframesToUse: Timeframe[] =
+        strategy.name === 'VOLUME_SPIKE_15M' ? ['15m'] : timeframes;
+
       // Para estratégia MA60_CROSSOVER, usar símbolos com market cap > 70 milhões
       // Para VOLUME_SPIKE, usar top por volume 24h para apanhar pares com volume relevante (ex.: RLSUSDT)
       let symbolsToAnalyze = symbols;
@@ -815,10 +921,10 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
         } else {
           console.warn('⚠️  Nenhum símbolo com market cap > 70 milhões encontrado, usando lista padrão');
         }
-      } else if (strategy.name === 'VOLUME_SPIKE') {
+      } else if (strategy.name === 'VOLUME_SPIKE' || strategy.name === 'VOLUME_SPIKE_15M') {
         const maxSymbols = 500;
-        const minQuoteVolume = 100000; // volume mínimo para evitar pares mortos
-        console.log('🔍 Buscando símbolos por % variação 24h para estratégia VOLUME_SPIKE...');
+        const minQuoteVolume = 100000;
+        console.log(`🔍 Buscando símbolos por % variação 24h para estratégia ${strategy.name}...`);
         const volumeSymbols = await fetchTopSymbolsBy24hPriceChange(maxSymbols, minQuoteVolume);
         if (volumeSymbols.length > 0) {
           symbolsToAnalyze = volumeSymbols;
@@ -878,7 +984,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       }
 
       for (const symbol of symbolsToAnalyze) {
-        for (const timeframe of timeframes) {
+        for (const timeframe of timeframesToUse) {
           try {
             let signalResult: SignalResult | null = null;
 
@@ -900,6 +1006,12 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
                 if (signalResult) {
                   console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'VOLUME_SPIKE_15M':
+                signalResult = await runVolumeSpike15mStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(`✅ Volume Spike 15m sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
                 }
                 break;
               case 'RSI':

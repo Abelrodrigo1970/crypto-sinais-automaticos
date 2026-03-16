@@ -20,7 +20,7 @@ export interface SignalForTrading {
 }
 
 /** Estratégias permitidas para trading automático */
-const ALLOWED_STRATEGIES = ['Volume Spike', 'Volume Spike 1h'];
+const ALLOWED_STRATEGIES = ['Volume Spike', 'Volume Spike 1h', '15MVolume'];
 
 /** Força mínima para executar (70) */
 const MIN_STRENGTH = 70;

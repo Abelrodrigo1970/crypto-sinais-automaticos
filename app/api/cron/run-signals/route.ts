@@ -9,7 +9,7 @@ import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResult
 async function runSignalsInBackground(hour: number, minute: number): Promise<void> {
   try {
     console.log('[Run-Signals BG] Iniciando MACD, MACD+PMO, MA60...');
-    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE'] });
+    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE', 'VOLUME_SPIKE_15M'] });
 
     const update24h = await update24hResults();
 
