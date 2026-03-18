@@ -45,14 +45,6 @@ export async function GET(request: NextRequest) {
     const hour = now.getHours();
     const minute = now.getMinutes();
 
-    if (hour < 8 || hour > 23) {
-      return NextResponse.json({
-        success: false,
-        message: `Fora do horário permitido. Horário atual: ${hour}:${minute.toString().padStart(2, '0')}. Permitido: 8:00 - 23:59`,
-        currentTime: `${hour}:${minute.toString().padStart(2, '0')}`,
-      });
-    }
-
     // Fire-and-forget: responde imediatamente, processa em background
     runSignalsInBackground(hour, minute);
 
@@ -60,7 +52,7 @@ export async function GET(request: NextRequest) {
       success: true,
       message: 'Processamento iniciado em background (MACD, MACD+PMO, MA60)',
       executedAt: now.toISOString(),
-      nextExecution: hour < 23 ? `${hour + 1}:00` : '8:00 (amanhã)',
+      nextExecution: `${(hour + 1) % 24}:00`,
     });
   } catch (error) {
     console.error('Erro no cron job:', error);

@@ -14,7 +14,7 @@ interface StrategyData {
 
 /**
  * Executa Volume Spike em background (fire-and-forget).
- * 400 símbolos, apenas sinais BUY. Resposta imediata.
+ * 400 símbolos, sinais BUY e SELL. Resposta imediata.
  */
 async function runVolumeSpikeInBackground(
   strategy: StrategyData,
@@ -33,8 +33,8 @@ async function runVolumeSpikeInBackground(
       try {
         const signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
 
-        // Apenas sinais de compra com força >= 70
-        if (signalResult && signalResult.direction === 'BUY' && signalResult.strength >= 70) {
+        // Sinais de compra e venda com força >= 85
+        if (signalResult && signalResult.strength >= 85) {
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
           const existingSignal = await prisma.signal.findFirst({
             where: {
@@ -115,7 +115,7 @@ async function runVolumeSpikeInBackground(
 
 /**
  * Endpoint de cron dedicado para Volume Spike
- * Resposta imediata - 400 símbolos, apenas compra
+ * Resposta imediata - 400 símbolos, compra e venda
  * Evita timeout 30s do cron-job.org
  */
 export async function GET(request: NextRequest) {
@@ -129,15 +129,6 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     const hour = now.getHours();
-    const minute = now.getMinutes();
-
-    if (hour < 8 || hour > 23) {
-      return NextResponse.json({
-        success: false,
-        message: `Fora do horário permitido. Horário atual: ${hour}:${minute.toString().padStart(2, '0')}. Permitido: 8:00 - 23:59`,
-        currentTime: `${hour}:${minute.toString().padStart(2, '0')}`,
-      });
-    }
 
     const strategy = await prisma.strategy.findFirst({
       where: { name: 'VOLUME_SPIKE' },
@@ -167,9 +158,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Processamento Volume Spike iniciado em background (400 símbolos, apenas compra)',
+      message: 'Processamento Volume Spike iniciado em background (400 símbolos, compra e venda)',
       executedAt: now.toISOString(),
-      nextExecution: hour < 23 ? `${hour + 1}:00` : '8:00 (amanhã)',
+      nextExecution: `${(hour + 1) % 24}:00`,
     });
   } catch (error) {
     console.error('Erro no cron Volume Spike:', error);

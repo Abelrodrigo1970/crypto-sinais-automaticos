@@ -409,7 +409,7 @@ export async function runMa60CrossoverStrategy(
 }
 
 /**
- * Estratégia Volume Spike: Gera sinais quando volume é maior que 6 vezes a média das últimas 20 horas
+ * Estratégia Volume Spike: Gera sinais quando volume é maior que 12 vezes a média das últimas 20 horas
  * Timeframe 1h - analisa volume das últimas 20 horas
  */
 export async function runVolumeSpikeStrategy(
@@ -422,7 +422,11 @@ export async function runVolumeSpikeStrategy(
     return null;
   }
 
-  const volumeMultiplier = params.volumeMultiplier || 6; // Múltiplo da média de volume
+  // Mantemos mínimo 12x para reduzir ruído mesmo se params antigos tiverem 6x.
+  const configuredMultiplier = Number(params.volumeMultiplier ?? 12);
+  const volumeMultiplier = Number.isFinite(configuredMultiplier) && configuredMultiplier > 0
+    ? Math.max(12, configuredMultiplier)
+    : 12;
   const lookbackHours = params.lookbackHours || 20; // Período para calcular média de volume
 
   try {
@@ -450,7 +454,7 @@ export async function runVolumeSpikeStrategy(
       return null;
     }
 
-    // Verificar se volume do candle fechado é maior que 6 vezes a média
+    // Verificar se volume do candle fechado é maior que 12 vezes a média
     const volumeRatio = currentVolume / volumeAverage;
     
     if (volumeRatio < volumeMultiplier) {
@@ -531,7 +535,7 @@ export async function runVolumeSpikeStrategy(
 
 /**
  * Estratégia Volume Spike 15m: igual ao Volume Spike 1h mas em 15m com 15 períodos
- * Gera sinais quando volume do último candle 15m fechado é maior que 6x a média dos últimos 15 candles
+ * Gera sinais quando volume do último candle 15m fechado é maior que 12x a média dos últimos 15 candles
  */
 export async function runVolumeSpike15mStrategy(
   symbol: string,
@@ -542,7 +546,11 @@ export async function runVolumeSpike15mStrategy(
     return null;
   }
 
-  const volumeMultiplier = params.volumeMultiplier || 6;
+  // Mantemos mínimo 12x para reduzir ruído mesmo se params antigos tiverem 6x.
+  const configuredMultiplier = Number(params.volumeMultiplier ?? 12);
+  const volumeMultiplier = Number.isFinite(configuredMultiplier) && configuredMultiplier > 0
+    ? Math.max(12, configuredMultiplier)
+    : 12;
   const lookbackPeriods = params.lookbackPeriods ?? 15;
 
   try {

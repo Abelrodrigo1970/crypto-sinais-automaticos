@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
             name: 'VOLUME_SPIKE',
             displayName: 'Volume Spike 1h',
             description:
-              'Gera sinais quando o volume do último candle fechado é maior que 6 vezes a média das últimas 20 horas. COMPRA: volume spike com preço a subir. VENDA: volume spike com preço a descer. Timeframe 1h.',
+              'Gera sinais quando o volume do último candle fechado é maior que 12 vezes a média das últimas 20 horas. COMPRA: volume spike com preço a subir. VENDA: volume spike com preço a descer. Timeframe 1h.',
             isActive: true,
             params: JSON.stringify({
-              volumeMultiplier: 6,
+              volumeMultiplier: 12,
               lookbackHours: 20,
             }),
           },

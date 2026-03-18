@@ -13,7 +13,7 @@ interface StrategyData {
 
 /**
  * Executa Volume Spike 15m em background.
- * 400 símbolos, timeframe 15m, 15 períodos. Apenas sinais BUY com força > 85.
+ * 400 símbolos, timeframe 15m, 15 períodos. Sinais BUY e SELL com força >= 85.
  */
 async function runVolumeSpike15mInBackground(
   strategy: StrategyData,
@@ -32,7 +32,7 @@ async function runVolumeSpike15mInBackground(
       try {
         const signalResult = await runVolumeSpike15mStrategy(symbol, timeframe, params);
 
-        if (signalResult && signalResult.direction === 'BUY' && signalResult.strength > 85) {
+        if (signalResult && signalResult.strength >= 85) {
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
           const existingSignal = await prisma.signal.findFirst({
             where: {
