@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
-
-export const dynamic = 'force-dynamic';
 import { prisma } from '@/lib/db';
 import { executeSignalReal, getExecutorStatus } from '@/lib/tradingExecutor';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET: Retorna status do executor (se pode executar trades).
  */
 export async function GET() {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const status = getExecutorStatus();
     return NextResponse.json({
       tradingEnabled: status.tradingEnabled,
@@ -37,10 +32,6 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const body = await request.json();
     const signalId = body?.signalId;
 

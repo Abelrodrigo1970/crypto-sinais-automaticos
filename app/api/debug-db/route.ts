@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 /**
@@ -7,10 +6,6 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const databaseUrl = process.env.DATABASE_URL || '';
     const isPostgreSQL = databaseUrl.startsWith('postgresql://') || databaseUrl.startsWith('postgres://');
     const isSQLite = databaseUrl.startsWith('file:');

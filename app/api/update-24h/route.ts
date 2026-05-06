@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
-import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResults';
+import { update24hResults } from '@/lib/update24hResults';
 
 /**
  * Endpoint para atualizar resultados após 24 horas dos sinais
@@ -8,10 +7,6 @@ import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResult
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const result = await update24hResults();
 
     return NextResponse.json({
@@ -38,15 +33,11 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verificar token de segurança para cron (opcional)
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    
+
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      // Se não tiver token, verificar autenticação normal
-      if (!(await isAuthenticated())) {
-        return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-      }
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const result = await update24hResults();

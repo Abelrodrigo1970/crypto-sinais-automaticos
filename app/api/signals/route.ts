@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ensureDatabase } from '@/lib/db-init';
 
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     // Garantir que o banco está inicializado
     const dbReady = await ensureDatabase();
     if (!dbReady) {

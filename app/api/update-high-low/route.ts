@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { updateMissingHighLow24h } from '@/lib/update24hResults';
 
 /**
@@ -9,10 +8,6 @@ import { updateMissingHighLow24h } from '@/lib/update24hResults';
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const maxIterations = parseInt(searchParams.get('maxIterations') || '10');
     const batchSize = parseInt(searchParams.get('batchSize') || '500');
@@ -62,10 +57,6 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const maxIterations = parseInt(searchParams.get('maxIterations') || '10');
 

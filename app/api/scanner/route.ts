@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { runScanner, type ScannerConfig } from '@/lib/scanner';
 
 /**
@@ -9,10 +8,6 @@ import { runScanner, type ScannerConfig } from '@/lib/scanner';
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const searchParams = request.nextUrl.searchParams;
     const config: ScannerConfig = {
       topSymbolsLimit: parseInt(searchParams.get('topSymbolsLimit') || '50'),
@@ -53,10 +48,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const body = await request.json();
     const config: ScannerConfig = {
       topSymbolsLimit: body.topSymbolsLimit || 50,

@@ -14,7 +14,6 @@ export async function GET() {
     // Verificar variáveis de ambiente
     health.checks.env = {
       DATABASE_URL: process.env.DATABASE_URL ? '✅ Configurado' : '❌ Não configurado',
-      ACCESS_CODE: process.env.ACCESS_CODE ? '✅ Configurado' : '❌ Não configurado',
       NODE_ENV: process.env.NODE_ENV || 'not set',
     };
 

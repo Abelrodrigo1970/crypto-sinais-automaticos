@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { runVolumeSpikeStrategy } from '@/lib/signalEngine';
 import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
@@ -7,13 +6,6 @@ import { fetchTopSymbolsBy24hPriceChange } from '@/lib/marketData';
 export async function POST(request: NextRequest) {
   console.log('📡 Endpoint /api/run-ma60-signals chamado (Volume Spike)');
   try {
-    // Verifica autenticação
-    if (!(await isAuthenticated())) {
-      console.log('❌ Autenticação falhou');
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-    console.log('✅ Autenticação OK');
-
     // Buscar estratégia VOLUME_SPIKE
     console.log('🔍 Buscando estratégia VOLUME_SPIKE...');
     let strategy = await prisma.strategy.findFirst({

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 const FEE_OPEN = 0.0005;
@@ -8,10 +7,6 @@ const TOTAL_FEE = FEE_OPEN + FEE_CLOSE;
 
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     // Buscar todos os sinais fechados com resultado 24h
     const signals = await prisma.signal.findMany({
       where: {

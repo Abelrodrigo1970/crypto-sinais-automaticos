@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
@@ -10,10 +9,6 @@ import path from 'path';
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const body = await request.json().catch(() => ({}));
     const backupFileName = body.backupFile || 'backup-2025-12-22T21-25-59.db';
     const backupPath = path.resolve(process.cwd(), 'backups', backupFileName);

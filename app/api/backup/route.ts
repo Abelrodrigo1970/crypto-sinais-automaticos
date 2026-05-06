@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAuthenticated } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,10 +9,6 @@ import path from 'path';
  */
 export async function GET(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const backupDir = path.resolve(process.cwd(), './backups');
     
     if (!fs.existsSync(backupDir)) {
@@ -57,10 +52,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthenticated())) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
     const dbPath = process.env.DATABASE_URL?.replace('file:', '') || './data/prod.db';
     const dbFile = path.resolve(process.cwd(), dbPath);
     const backupDir = path.resolve(process.cwd(), './backups');
