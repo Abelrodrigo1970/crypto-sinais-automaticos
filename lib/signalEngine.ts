@@ -14,6 +14,8 @@ import {
   getCloses,
   getVolumes,
   calculateVolumeMA,
+  getSmaPercentDistanceSeries,
+  smaTail,
 } from './indicators';
 
 export interface SignalResult {
@@ -404,6 +406,129 @@ export async function runMa60CrossoverStrategy(
     return null;
   } catch (error) {
     console.error(`Erro na estratégia MA60 Crossover para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Afastamento médio (mean reversion): distância % do preço à SMA(maPeriod),
+ * com linha de sinal = SMA(smoothPeriod) dessa distância (estilo "Afastamento % da Média 80 7").
+ * VENDA: afastamento cruza acima do limiar superior (preço demasiado esticado acima da média).
+ * COMPRA: afastamento cruza abaixo do limiar inferior (esticado abaixo da média).
+ * Timeframe 1h; recomenda-se filtro de símbolos com market cap elevado (igual à MA60).
+ */
+export async function runAfastamentoMedioStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '1h') {
+    return null;
+  }
+
+  const maPeriod = Math.max(2, Number(params.maPeriod) || 80);
+  const smoothPeriod = Math.max(2, Number(params.smoothPeriod) || 7);
+  const upperThreshold = Number(params.upperThresholdPct ?? 60);
+  const lowerThreshold = Number(params.lowerThresholdPct ?? -60);
+  const requireSmoothCross =
+    params.requireSmoothCross === true ||
+    params.requireSmoothCross === 'true';
+
+  const candlesNeeded = maPeriod + smoothPeriod + 25;
+  try {
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+    if (candles.length < maPeriod + smoothPeriod + 2) {
+      return null;
+    }
+
+    const closes = getCloses(candles);
+    const distances = getSmaPercentDistanceSeries(closes, maPeriod);
+    if (distances.length < smoothPeriod + 2) {
+      return null;
+    }
+
+    const currDist = distances[distances.length - 1];
+    const prevDist = distances[distances.length - 2];
+
+    const smoothCurr = smaTail(distances, smoothPeriod);
+    const smoothPrev = smaTail(distances.slice(0, -1), smoothPeriod);
+    if (smoothCurr === null || smoothPrev === null) {
+      return null;
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+    const currentMA = calculateSMA(closes, maPeriod);
+    if (currentMA === null || currentMA === 0) {
+      return null;
+    }
+
+    const extraBase = {
+      maPeriod,
+      smoothPeriod,
+      distancePct: currDist.toFixed(3),
+      prevDistancePct: prevDist.toFixed(3),
+      smoothDistancePct: smoothCurr.toFixed(3),
+      prevSmoothDistancePct: smoothPrev.toFixed(3),
+      maAtClose: currentMA.toFixed(8),
+      upperThreshold,
+      lowerThreshold,
+    };
+
+    const crossShort =
+      prevDist <= upperThreshold &&
+      currDist > upperThreshold &&
+      (!requireSmoothCross || (smoothPrev <= upperThreshold && smoothCurr > upperThreshold));
+
+    if (crossShort) {
+      const stopLoss = currentPrice * 1.04;
+      const target1 = currentMA;
+      const overshoot = currDist - upperThreshold;
+      const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2: target1,
+        target3: target1,
+        strength,
+        extraInfo: JSON.stringify({
+          ...extraBase,
+          setup: 'mean_reversion_short',
+        }),
+      };
+    }
+
+    const crossLong =
+      prevDist >= lowerThreshold &&
+      currDist < lowerThreshold &&
+      (!requireSmoothCross || (smoothPrev >= lowerThreshold && smoothCurr < lowerThreshold));
+
+    if (crossLong) {
+      const stopLoss = currentPrice * 0.96;
+      const target1 = currentMA;
+      const overshoot = lowerThreshold - currDist;
+      const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2: target1,
+        target3: target1,
+        strength,
+        extraInfo: JSON.stringify({
+          ...extraBase,
+          setup: 'mean_reversion_long',
+        }),
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia Afastamento Médio para ${symbol}:`, error);
     return null;
   }
 }
@@ -917,11 +1042,13 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       const timeframesToUse: Timeframe[] =
         strategy.name === 'VOLUME_SPIKE_15M' ? ['15m'] : timeframes;
 
-      // Para estratégia MA60_CROSSOVER, usar símbolos com market cap > 70 milhões
+      // Para MA60_CROSSOVER e AFASTAMENTO_MEDIO, usar símbolos com market cap > 70 milhões
       // Para VOLUME_SPIKE, usar top por volume 24h para apanhar pares com volume relevante (ex.: RLSUSDT)
       let symbolsToAnalyze = symbols;
-      if (strategy.name === 'MA60_CROSSOVER') {
-        console.log('🔍 Buscando símbolos com market cap > 70 milhões para estratégia MA60_CROSSOVER...');
+      if (strategy.name === 'MA60_CROSSOVER' || strategy.name === 'AFASTAMENTO_MEDIO') {
+        const label =
+          strategy.name === 'MA60_CROSSOVER' ? 'MA60_CROSSOVER' : 'AFASTAMENTO_MEDIO';
+        console.log(`🔍 Buscando símbolos com market cap > 70 milhões para estratégia ${label}...`);
         const highMarketCapSymbols = await fetchSymbolsWithMarketCap(70000000);
         if (highMarketCapSymbols.length > 0) {
           symbolsToAnalyze = highMarketCapSymbols;
@@ -1008,6 +1135,14 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 signalResult = await runMa60CrossoverStrategy(symbol, timeframe, params);
                 if (signalResult) {
                   console.log(`✅ MA60 sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
+                }
+                break;
+              case 'AFASTAMENTO_MEDIO':
+                signalResult = await runAfastamentoMedioStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(
+                    `✅ Afastamento médio sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`
+                  );
                 }
                 break;
               case 'VOLUME_SPIKE':

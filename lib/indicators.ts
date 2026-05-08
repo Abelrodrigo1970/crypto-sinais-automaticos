@@ -39,6 +39,40 @@ export function calculateSMA(values: number[], period: number): number | null {
 }
 
 /**
+ * Série de afastamento percentual do fecho à SMA(maPeriod) por candle.
+ * O elemento distances[k] corresponde ao candle de índice (maPeriod - 1 + k) em closes.
+ */
+export function getSmaPercentDistanceSeries(closes: number[], maPeriod: number): number[] {
+  if (closes.length < maPeriod) {
+    return [];
+  }
+  const distances: number[] = [];
+  let sum = 0;
+  for (let j = 0; j < maPeriod; j++) {
+    sum += closes[j];
+  }
+  for (let i = maPeriod - 1; i < closes.length; i++) {
+    const ma = sum / maPeriod;
+    distances.push(ma !== 0 ? ((closes[i] - ma) / ma) * 100 : 0);
+    if (i < closes.length - 1) {
+      sum += closes[i + 1] - closes[i - maPeriod + 1];
+    }
+  }
+  return distances;
+}
+
+/**
+ * SMA simples dos últimos `period` valores de um array (usa os últimos elementos).
+ */
+export function smaTail(values: number[], period: number): number | null {
+  if (values.length < period || period < 1) {
+    return null;
+  }
+  const slice = values.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
+
+/**
  * Calcula MACD
  */
 export function calculateMACD(

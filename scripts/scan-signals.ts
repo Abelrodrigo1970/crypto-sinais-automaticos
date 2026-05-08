@@ -12,6 +12,7 @@ import {
 import {
   runVolumeSpikeStrategy,
   runMa60CrossoverStrategy,
+  runAfastamentoMedioStrategy,
   runMacdHistogramStrategy,
   runMacdHistogramPmoStrategy,
   fetchSymbolsWithMarketCap,
@@ -31,6 +32,7 @@ type StrategyDef = {
 // Nº de símbolos por estratégia (aumentar para scan completo; reduzir para scan rápido)
 const VOLUME_SYMBOLS = 150;
 const MA60_SYMBOLS = 150; // fetchSymbolsWithMarketCap devolve todos; limitamos no loop
+const AFASTAMENTO_SYMBOLS = 150;
 const MACD_SYMBOLS = 80;
 
 const STRATEGIES: StrategyDef[] = [
@@ -49,6 +51,21 @@ const STRATEGIES: StrategyDef[] = [
     timeframes: ['1h'],
     getParams: () => ({ maPeriod: 200 }),
     run: runMa60CrossoverStrategy,
+  },
+  {
+    name: 'AFASTAMENTO_MEDIO',
+    displayName: 'Afastamento médio',
+    getSymbols: async () =>
+      (await fetchSymbolsWithMarketCap(70000000)).slice(0, AFASTAMENTO_SYMBOLS),
+    timeframes: ['1h'],
+    getParams: () => ({
+      maPeriod: 80,
+      smoothPeriod: 7,
+      upperThresholdPct: 60,
+      lowerThresholdPct: -60,
+      requireSmoothCross: false,
+    }),
+    run: runAfastamentoMedioStrategy,
   },
   {
     name: 'MACD_HISTOGRAM_PMO',
