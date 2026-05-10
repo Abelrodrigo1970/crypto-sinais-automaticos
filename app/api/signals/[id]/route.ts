@@ -32,7 +32,6 @@ export async function GET(
         high24h: true,
         low24h: true,
         // executedAt/executionOrderId omitidos se BD não tiver
-        strategy: true,
       },
     });
 

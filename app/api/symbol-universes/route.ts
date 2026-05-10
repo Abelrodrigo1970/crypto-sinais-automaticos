@@ -10,6 +10,11 @@ export async function GET() {
     return NextResponse.json({ universes });
   } catch (error) {
     console.error('Erro ao listar universos:', error);
-    return NextResponse.json({ error: 'Erro ao listar universos' }, { status: 500 });
+    return NextResponse.json({
+      universes: [],
+      warning:
+        'Tabela SymbolUniverse inexistente nesta BD. Executa `npx prisma db push` no deploy e corre o seed dos universos.',
+      details: error instanceof Error ? error.message : undefined,
+    });
   }
 }

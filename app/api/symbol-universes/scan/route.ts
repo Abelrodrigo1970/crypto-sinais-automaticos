@@ -12,12 +12,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Parâmetro code obrigatório' }, { status: 400 });
     }
 
-    const universe = await prisma.symbolUniverse.findUnique({
-      where: { code },
-    });
+    let universe;
+    try {
+      universe = await prisma.symbolUniverse.findUnique({
+        where: { code },
+      });
+    } catch (dbErr) {
+      console.error('symbolUniverse.findUnique:', dbErr);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Base de dados sem tabela SymbolUniverse',
+          details: dbErr instanceof Error ? dbErr.message : undefined,
+          hint: 'Corre `npx prisma db push` no servidor e `npx tsx prisma/seed.ts` (ou insere os 2 universos manualmente).',
+        },
+        { status: 503 }
+      );
+    }
 
     if (!universe) {
-      return NextResponse.json({ error: `Universo não encontrado: ${code}` }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: `Universo não encontrado: ${code}`,
+          hint: 'Sem registo na BD — corre o seed ou cria SymbolUniverse com este code.',
+        },
+        { status: 404 }
+      );
     }
 
     const rows = await scanSymbolUniverse({
@@ -42,11 +62,16 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Erro no scan de universo:', error);
+    const msg = error instanceof Error ? error.message : 'Erro desconhecido';
     return NextResponse.json(
       {
         success: false,
         error: 'Erro ao executar scan',
-        details: error instanceof Error ? error.message : 'Erro desconhecido',
+        details: msg,
+        hint:
+          msg.includes('does not exist') || msg.includes('SymbolUniverse')
+            ? 'Schema em falta na BD: `npx prisma db push`'
+            : undefined,
       },
       { status: 500 }
     );

@@ -12,6 +12,38 @@ export interface Candle {
 }
 
 /**
+ * Na Binance USDⓈ-M vários memecoins usam contrato com multiplicador "1000…"
+ * (ex.: ticker PEPEUSDT devolve 400; o contrato válido é 1000PEPEUSDT).
+ */
+const BINANCE_USDM_SYMBOL_ALIASES: Record<string, string> = {
+  PEPEUSDT: '1000PEPEUSDT',
+  SHIBUSDT: '1000SHIBUSDT',
+  FLOKIUSDT: '1000FLOKIUSDT',
+  BONKUSDT: '1000BONKUSDT',
+  SATSUSDT: '1000SATSUSDT',
+  RATSUSDT: '1000RATSUSDT',
+  LUNCUSDT: '1000LUNCUSDT',
+  XECUSDT: '1000XECUSDT',
+  CHEEMSUSDT: '1000CHEEMSUSDT',
+};
+
+/** Símbolo aceite pela API fapi (klines / ticker price). */
+export function toBinanceUsdMFuturesSymbol(symbol: string): string {
+  const upper = symbol.trim().toUpperCase();
+  return BINANCE_USDM_SYMBOL_ALIASES[upper] ?? upper;
+}
+
+/** Ordem de tentativa: alias primeiro se existir, depois o símbolo original (BD legada). */
+function futuresPriceSymbolCandidates(symbol: string): string[] {
+  const upper = symbol.trim().toUpperCase();
+  const mapped = BINANCE_USDM_SYMBOL_ALIASES[upper];
+  if (mapped && mapped !== upper) {
+    return [mapped, upper];
+  }
+  return [upper];
+}
+
+/**
  * Busca velas (candles) de uma exchange pública (Binance Futures USDⓈ-M)
  */
 export async function fetchCandles(
@@ -21,8 +53,9 @@ export async function fetchCandles(
   startTime?: number,
   endTime?: number
 ): Promise<Candle[]> {
+  const apiSymbol = toBinanceUsdMFuturesSymbol(symbol);
   try {
-    let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${apiSymbol}&interval=${interval}&limit=${limit}`;
     
     if (startTime) {
       url += `&startTime=${startTime}`;
@@ -57,37 +90,46 @@ export async function fetchCandles(
 
 /**
  * Busca o preço atual de um par (Futures USDⓈ-M)
- * Retry em caso de Bad Request/erro temporário da API
+ * Usa aliases 1000* quando necessário; retry para falhas transitórias.
  */
 export async function fetchCurrentPrice(symbol: string, retries = 2): Promise<number> {
+  const candidates = futuresPriceSymbolCandidates(symbol);
   let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(
-        `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`
-      );
 
-      if (!response.ok) {
-        if (response.status === 400 && attempt < retries) {
-          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    for (const sym of candidates) {
+      try {
+        const response = await fetch(
+          `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${sym}`
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return parseFloat(data.price);
+        }
+
+        // 400 = símbolo inválido neste endpoint; tentar próximo alias (ex.: PEPE → 1000PEPE)
+        if (response.status === 400) {
+          lastError = new Error(`Erro ao buscar preço: Bad Request (${sym})`);
           continue;
         }
-        throw new Error(`Erro ao buscar preço: ${response.statusText}`);
-      }
 
-      const data = await response.json();
-      return parseFloat(data.price);
-    } catch (error) {
-      lastError = error;
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-      } else {
-        console.error(`Erro ao buscar preço para ${symbol}:`, error);
-        throw error;
+        throw new Error(`Erro ao buscar preço: ${response.statusText}`);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('Erro ao buscar preço:')) {
+          throw error;
+        }
+        lastError = error;
       }
     }
+
+    if (attempt < retries) {
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
   }
-  throw lastError;
+
+  console.error(`Erro ao buscar preço para ${symbol} (tentativas: ${candidates.join(', ')}):`, lastError);
+  throw lastError instanceof Error ? lastError : new Error('Erro ao buscar preço');
 }
 
 /**

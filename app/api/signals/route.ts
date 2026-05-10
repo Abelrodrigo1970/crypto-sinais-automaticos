@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
         high24h: true,
         low24h: true,
         // executedAt/executionOrderId omitidos para BD sem essas colunas
-        strategy: true,
+        // Não incluir relation strategy: evita JOIN na tabela Strategy (schema antigo na BD quebra com novas colunas)
       },
     });
 

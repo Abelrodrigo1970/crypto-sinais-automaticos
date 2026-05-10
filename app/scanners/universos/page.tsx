@@ -39,7 +39,12 @@ export default function UniversosMa200Page() {
       const res = await fetch(`/api/symbol-universes/scan?code=${encodeURIComponent(code)}`);
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data.error || data.details || 'Erro no scan');
+        const parts = [
+          data.error || 'Erro no scan',
+          data.details && String(data.details),
+          data.hint && String(data.hint),
+        ].filter(Boolean);
+        setMsg(parts.join(' — '));
         setRows([]);
         setMeta({});
         return;
