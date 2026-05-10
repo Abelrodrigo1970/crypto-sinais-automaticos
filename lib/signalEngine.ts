@@ -15,7 +15,9 @@ import {
   getVolumes,
   calculateVolumeMA,
   getSmaPercentDistanceSeries,
+  getEmaPercentDistanceSeries,
   smaTail,
+  calculateEMA,
 } from './indicators';
 
 export interface SignalResult {
@@ -411,11 +413,11 @@ export async function runMa60CrossoverStrategy(
 }
 
 /**
- * Afastamento médio (mean reversion): distância % do preço à SMA(maPeriod),
- * com linha de sinal = SMA(smoothPeriod) dessa distância (estilo "Afastamento % da Média 80 7").
- * VENDA: afastamento cruza acima do limiar superior (preço demasiado esticado acima da média).
- * COMPRA: afastamento cruza abaixo do limiar inferior (esticado abaixo da média).
- * Timeframe 1h; recomenda-se filtro de símbolos com market cap elevado (igual à MA60).
+ * Afastamento médio (TradingView-style): distância % do fecho à média longa (EMA ou SMA, def.: EMA 80),
+ * com suavização SMA(smoothPeriod) dessa série ("… 7").
+ * COMPRA (como no gráfico Pivot/EMA): cruza acima de buySmoothCurrMin vindo de abaixo,
+ * tendo estado na zona ≤ buySmoothPrevMax nos candles anteriores (lookback), e preço acima da média 30 (def.: EMA).
+ * VENDA: afastamento cruza acima do limiar superior vs a mesma média longa.
  */
 export async function runAfastamentoMedioStrategy(
   symbol: string,
@@ -430,19 +432,32 @@ export async function runAfastamentoMedioStrategy(
   const smoothPeriod = Math.max(2, Number(params.smoothPeriod) || 7);
   const upperThreshold = Number(params.upperThresholdPct ?? 60);
   const lowerThreshold = Number(params.lowerThresholdPct ?? -60);
+  const buyTrendMaPeriod = Math.max(2, Number(params.buyTrendMaPeriod) || 30);
+  const buySmoothPrevMax = Number(params.buySmoothPrevMax ?? 2);
+  const buySmoothCurrMin = Number(params.buySmoothCurrMin ?? 3);
+  const buySmoothLookback = Math.max(3, Number(params.buySmoothLookback ?? 12));
+  const meanLineType =
+    String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
+  const trendMaType =
+    String(params.trendMaType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
   const requireSmoothCross =
     params.requireSmoothCross === true ||
     params.requireSmoothCross === 'true';
 
-  const candlesNeeded = maPeriod + smoothPeriod + 25;
+  const candlesNeeded =
+    Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + buySmoothLookback + 35;
   try {
     const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
-    if (candles.length < maPeriod + smoothPeriod + 2) {
+    const minCloses = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + buySmoothLookback + 3;
+    if (candles.length < minCloses) {
       return null;
     }
 
     const closes = getCloses(candles);
-    const distances = getSmaPercentDistanceSeries(closes, maPeriod);
+    const distances =
+      meanLineType === 'SMA'
+        ? getSmaPercentDistanceSeries(closes, maPeriod)
+        : getEmaPercentDistanceSeries(closes, maPeriod);
     if (distances.length < smoothPeriod + 2) {
       return null;
     }
@@ -457,21 +472,57 @@ export async function runAfastamentoMedioStrategy(
     }
 
     const currentPrice = candles[candles.length - 1].close;
-    const currentMA = calculateSMA(closes, maPeriod);
-    if (currentMA === null || currentMA === 0) {
+
+    let meanAtClose: number | null = null;
+    if (meanLineType === 'EMA') {
+      const em = calculateEMA(closes, maPeriod);
+      meanAtClose = em?.length ? em[em.length - 1]! : null;
+    } else {
+      meanAtClose = calculateSMA(closes, maPeriod);
+    }
+
+    let trendAtClose: number | null = null;
+    if (trendMaType === 'EMA') {
+      const em = calculateEMA(closes, buyTrendMaPeriod);
+      trendAtClose = em?.length ? em[em.length - 1]! : null;
+    } else {
+      trendAtClose = calculateSMA(closes, buyTrendMaPeriod);
+    }
+
+    if (
+      meanAtClose === null ||
+      meanAtClose === 0 ||
+      trendAtClose === null ||
+      trendAtClose === 0
+    ) {
       return null;
+    }
+
+    const recentSmooth: number[] = [];
+    for (let drop = 0; drop < buySmoothLookback; drop++) {
+      const d = distances.slice(0, distances.length - drop);
+      if (d.length < smoothPeriod) break;
+      const s = smaTail(d, smoothPeriod);
+      if (s !== null) recentSmooth.push(s);
     }
 
     const extraBase = {
       maPeriod,
       smoothPeriod,
+      meanLineType,
+      trendMaType,
       distancePct: currDist.toFixed(3),
       prevDistancePct: prevDist.toFixed(3),
       smoothDistancePct: smoothCurr.toFixed(3),
       prevSmoothDistancePct: smoothPrev.toFixed(3),
-      maAtClose: currentMA.toFixed(8),
+      meanAtClose: meanAtClose.toFixed(8),
+      trendMaPeriod: buyTrendMaPeriod,
+      trendAtClose: trendAtClose.toFixed(8),
       upperThreshold,
       lowerThreshold,
+      buySmoothPrevMax,
+      buySmoothCurrMin,
+      buySmoothLookback,
     };
 
     const crossShort =
@@ -481,7 +532,7 @@ export async function runAfastamentoMedioStrategy(
 
     if (crossShort) {
       const stopLoss = currentPrice * 1.04;
-      const target1 = currentMA;
+      const target1 = meanAtClose;
       const overshoot = currDist - upperThreshold;
       const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
 
@@ -500,28 +551,34 @@ export async function runAfastamentoMedioStrategy(
       };
     }
 
-    const crossLong =
-      prevDist >= lowerThreshold &&
-      currDist < lowerThreshold &&
-      (!requireSmoothCross || (smoothPrev >= lowerThreshold && smoothCurr < lowerThreshold));
+    const crossedAboveBuyMin =
+      recentSmooth.length >= 2 &&
+      recentSmooth[1] < buySmoothCurrMin &&
+      recentSmooth[0] >= buySmoothCurrMin;
+    const hadSmoothInLowZone = recentSmooth.slice(1).some((s) => s <= buySmoothPrevMax);
 
-    if (crossLong) {
+    if (crossedAboveBuyMin && hadSmoothInLowZone && currentPrice > trendAtClose) {
       const stopLoss = currentPrice * 0.96;
-      const target1 = currentMA;
-      const overshoot = lowerThreshold - currDist;
-      const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
+      const target1 = currentPrice * 1.2;
+      const target2 = target1;
+      const target3 = target1;
+      const rise = smoothCurr - smoothPrev;
+      const strength = Math.min(
+        100,
+        Math.max(60, Math.round(65 + Math.min(Math.max(rise, 0) * 10, 25)))
+      );
 
       return {
         direction: 'BUY',
         entryPrice: currentPrice,
         stopLoss,
         target1,
-        target2: target1,
-        target3: target1,
+        target2,
+        target3,
         strength,
         extraInfo: JSON.stringify({
           ...extraBase,
-          setup: 'mean_reversion_long',
+          setup: 'smooth_rise_buy_above_ma30',
         }),
       };
     }

@@ -62,6 +62,24 @@ export function getSmaPercentDistanceSeries(closes: number[], maPeriod: number):
 }
 
 /**
+ * Série de afastamento percentual do fecho à EMA(maPeriod), alinhada ao TradingView (ex.: Média 80).
+ * distances[k] corresponde ao candle closes[maPeriod - 1 + k].
+ */
+export function getEmaPercentDistanceSeries(closes: number[], maPeriod: number): number[] {
+  const emaAll = calculateEMA(closes, maPeriod);
+  if (!emaAll || emaAll.length === 0) {
+    return [];
+  }
+  const distances: number[] = [];
+  for (let k = 0; k < emaAll.length; k++) {
+    const close = closes[maPeriod - 1 + k];
+    const em = emaAll[k];
+    distances.push(em !== 0 ? ((close - em) / em) * 100 : 0);
+  }
+  return distances;
+}
+
+/**
  * SMA simples dos últimos `period` valores de um array (usa os últimos elementos).
  */
 export function smaTail(values: number[], period: number): number | null {
