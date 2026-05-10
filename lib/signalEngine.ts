@@ -3,6 +3,7 @@
  */
 
 import { prisma } from './db';
+import { scanSymbolUniverseSymbols } from './universeScanner';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsBy24hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import { runScanner } from './scanner';
@@ -1064,6 +1065,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
     // Busca todas as estratégias ativas
     let strategies = await prisma.strategy.findMany({
       where: { isActive: true },
+      include: { symbolUniverse: true },
     });
 
     // Excluir estratégias opcionais (ex: VOLUME_SPIKE em cron separado)
@@ -1099,10 +1101,26 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       const timeframesToUse: Timeframe[] =
         strategy.name === 'VOLUME_SPIKE_15M' ? ['15m'] : timeframes;
 
-      // Para MA60_CROSSOVER e AFASTAMENTO_MEDIO, usar símbolos com market cap > 70 milhões
-      // Para VOLUME_SPIKE, usar top por volume 24h para apanhar pares com volume relevante (ex.: RLSUSDT)
+      // Universo configurado na BD (Scanner 1 / 2) substitui listagens por defeito
       let symbolsToAnalyze = symbols;
-      if (strategy.name === 'MA60_CROSSOVER' || strategy.name === 'AFASTAMENTO_MEDIO') {
+      if (strategy.symbolUniverse) {
+        const su = strategy.symbolUniverse;
+        console.log(`🔍 Universo «${su.displayName}» (${su.code}) para ${strategy.name}...`);
+        try {
+          symbolsToAnalyze = await scanSymbolUniverseSymbols({
+            ruleType: su.ruleType,
+            maPeriod: su.maPeriod,
+            maxDistancePct: su.maxDistancePct,
+            timeframe: su.timeframe,
+            minQuoteVolume: su.minQuoteVolume,
+            candidateLimit: su.candidateLimit,
+          });
+          console.log(`✅ ${symbolsToAnalyze.length} símbolos após filtro de universo`);
+        } catch (e) {
+          console.error(`Erro ao aplicar universo ${su.code}:`, e);
+          symbolsToAnalyze = [];
+        }
+      } else if (strategy.name === 'MA60_CROSSOVER' || strategy.name === 'AFASTAMENTO_MEDIO') {
         const label =
           strategy.name === 'MA60_CROSSOVER' ? 'MA60_CROSSOVER' : 'AFASTAMENTO_MEDIO';
         console.log(`🔍 Buscando símbolos com market cap > 70 milhões para estratégia ${label}...`);

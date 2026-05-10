@@ -6,6 +6,9 @@ export async function GET(request: NextRequest) {
     // Listagem pública - necessário para o dropdown de filtros no dashboard
     const strategies = await prisma.strategy.findMany({
       orderBy: { name: 'asc' },
+      include: {
+        symbolUniverse: true,
+      },
     });
 
     return NextResponse.json({ strategies });
@@ -21,7 +24,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, isActive, params } = body;
+    const { id, isActive, params, symbolUniverseId } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -37,10 +40,17 @@ export async function PUT(request: NextRequest) {
     if (params) {
       updateData.params = JSON.stringify(params);
     }
+    if (symbolUniverseId !== undefined) {
+      updateData.symbolUniverseId =
+        symbolUniverseId === null || symbolUniverseId === ''
+          ? null
+          : String(symbolUniverseId);
+    }
 
     const strategy = await prisma.strategy.update({
       where: { id },
       data: updateData,
+      include: { symbolUniverse: true },
     });
 
     return NextResponse.json({ strategy });

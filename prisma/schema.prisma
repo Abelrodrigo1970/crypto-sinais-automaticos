@@ -10,6 +10,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Conjunto de símbolos (ex.: acima da MA200 vs até ±10% da MA200) para estratégias filtrarem o universo.
+model SymbolUniverse {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  displayName      String
+  description      String
+  /// ABOVE_MA | WITHIN_PCT_OF_MA
+  ruleType         String
+  maPeriod         Int      @default(200)
+  /// Para WITHIN_PCT_OF_MA: distância abs(close-MA)/MA * 100 <= este valor
+  maxDistancePct   Float?
+  timeframe        String   @default("1h")
+  minQuoteVolume   Float    @default(100000)
+  candidateLimit   Int      @default(400)
+
+  strategies Strategy[]
+}
+
 model Strategy {
   id          String   @id @default(cuid())
   name        String   @unique // ex: "RSI", "MA_CROSSOVER"
@@ -19,6 +37,9 @@ model Strategy {
   params      String   @default("{}") // JSON string com parâmetros
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  symbolUniverseId String?
+  symbolUniverse   SymbolUniverse? @relation(fields: [symbolUniverseId], references: [id], onDelete: SetNull)
 
   signals Signal[]
 }

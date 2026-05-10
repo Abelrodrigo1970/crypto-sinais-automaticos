@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 
+interface SymbolUniverseOption {
+  id: string;
+  code: string;
+  displayName: string;
+}
+
 interface Strategy {
   id: string;
   name: string;
@@ -11,17 +17,33 @@ interface Strategy {
   description: string;
   isActive: boolean;
   params: string;
+  symbolUniverseId?: string | null;
+  symbolUniverse?: SymbolUniverseOption | null;
 }
 
 export default function EstrategiasPage() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [universes, setUniverses] = useState<SymbolUniverseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     fetchStrategies();
+    fetchUniverses();
   }, []);
+
+  const fetchUniverses = async () => {
+    try {
+      const response = await fetch('/api/symbol-universes');
+      const data = await response.json();
+      if (response.ok && Array.isArray(data.universes)) {
+        setUniverses(data.universes);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar universos:', error);
+    }
+  };
 
   const fetchStrategies = async () => {
     try {
@@ -60,6 +82,32 @@ export default function EstrategiasPage() {
       }
     } catch (error) {
       setMessage('Erro ao atualizar estratégia');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const handleUniverseChange = async (strategy: Strategy, symbolUniverseId: string | null) => {
+    try {
+      setSaving(strategy.id);
+      const response = await fetch('/api/strategies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: strategy.id,
+          symbolUniverseId,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchStrategies();
+        setMessage('Universo de símbolos atualizado');
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('Erro ao atualizar universo');
+      }
+    } catch (error) {
+      setMessage('Erro ao atualizar universo');
     } finally {
       setSaving(null);
     }
@@ -323,6 +371,34 @@ export default function EstrategiasPage() {
                       ? 'Desativar'
                       : 'Ativar'}
                   </button>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Universo de símbolos (Scanner BD)
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Se escolheres Scanner 1 ou 2, o motor só analisa esses pares em vez da lista por defeito
+                    (ex.: MA60 mantinha market cap; com universo, vale o universo).
+                  </p>
+                  <select
+                    value={strategy.symbolUniverseId ?? ''}
+                    disabled={saving === strategy.id}
+                    onChange={(e) =>
+                      handleUniverseChange(
+                        strategy,
+                        e.target.value === '' ? null : e.target.value
+                      )
+                    }
+                    className="w-full max-w-lg px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  >
+                    <option value="">Predefinição (sem universo Scanner 1/2)</option>
+                    {universes.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.displayName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
