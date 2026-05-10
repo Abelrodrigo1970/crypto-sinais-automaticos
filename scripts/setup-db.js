@@ -106,9 +106,44 @@ try {
   process.exit(1);
 }
 
+/**
+ * Tabela CronLog legada (não está no schema atual). O db push tentaria apagá-la com
+ * --accept-data-loss. Removemos só esta tabela em PostgreSQL para o push aplicar SymbolUniverse, etc.
+ * Para preservar dados: PRISMA_KEEP_LEGACY_CRONLOG=1 e corre `npx prisma db pull` para alinhar o schema.
+ */
+function dropLegacyCronLogIfNeeded() {
+  if (!isPostgreSQL) return;
+  if (process.env.PRISMA_KEEP_LEGACY_CRONLOG === '1') {
+    console.log(
+      'ℹ️  PRISMA_KEEP_LEGACY_CRONLOG=1 — não vou remover CronLog; se o push falhar por data loss, usa db pull ou aceita perda só para essa tabela.\n'
+    );
+    return;
+  }
+  console.log(
+    '🗑️  PostgreSQL: a remover tabela legada "CronLog" se existir (não usada pela app; evita --accept-data-loss no db push)...'
+  );
+  try {
+    execSync('npx prisma db execute --stdin --schema prisma/schema.prisma', {
+      cwd: process.cwd(),
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      input: 'DROP TABLE IF EXISTS "CronLog" CASCADE;\n',
+      stdio: ['pipe', 'inherit', 'inherit'],
+    });
+    console.log('✅ CronLog legada tratada.\n');
+  } catch (e) {
+    console.warn(
+      '⚠️  Não foi possível executar DROP em CronLog (normal no build sem acesso à BD):',
+      e.message || e
+    );
+    console.warn('   No próximo arranque com rede à Postgres o drop será tentado de novo.\n');
+  }
+}
+
 if (isPostgreSQL) {
   console.log('✅ Detectado: PostgreSQL');
-  
+
+  dropLegacyCronLogIfNeeded();
+
   // Se for railway.internal, não tentar conectar durante o build (só funciona em runtime)
   if (databaseUrl.includes('railway.internal')) {
     console.log('⚠️  PostgreSQL com railway.internal detectado.');
