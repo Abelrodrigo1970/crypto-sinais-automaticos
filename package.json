@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "node scripts/setup-db.js && next build",
     "postbuild": "tsx prisma/seed.ts || true",
-    "start": "npx prisma db push && next start",
+    "start": "node scripts/setup-db.js && npx prisma db push && next start",
     "postinstall": "prisma generate",
     "lint": "next lint",
     "db:push": "prisma db push",
