@@ -36,6 +36,40 @@ export async function ensureDatabase() {
         // Verificar se as tabelas existem tentando contar estratégias
         try {
           await prisma.strategy.count();
+          // Schema antigo: Strategy existe mas faltam tabelas novas (ex. SymbolUniverse)
+          try {
+            await prisma.symbolUniverse.count();
+          } catch {
+            console.log('⚠️  Tabela SymbolUniverse em falta. Aplicando schema (db push)...');
+            execSync('npx prisma db push', {
+              stdio: 'pipe',
+              cwd: process.cwd(),
+              env: { ...process.env },
+            });
+            console.log('✅ Schema atualizado (SymbolUniverse).');
+            try {
+              execSync('npx tsx prisma/seed.ts', { stdio: 'pipe', cwd: process.cwd() });
+              console.log('✅ Seed executado (universos / estratégias).');
+            } catch {
+              console.log('⚠️  Seed opcional falhou (normal se prisma/seed ignorado no deploy).');
+            }
+          }
+          // FK/coluna nova em Strategy sem db push completo
+          try {
+            await prisma.$queryRawUnsafe(`SELECT "symbolUniverseId" FROM "Strategy" LIMIT 1`);
+          } catch {
+            console.log('⚠️  Coluna Strategy.symbolUniverseId em falta. Aplicando schema (db push)...');
+            execSync('npx prisma db push', {
+              stdio: 'pipe',
+              cwd: process.cwd(),
+              env: { ...process.env },
+            });
+            try {
+              execSync('npx tsx prisma/seed.ts', { stdio: 'pipe', cwd: process.cwd() });
+            } catch {
+              /* opcional */
+            }
+          }
           console.log('✅ PostgreSQL conectado e tabelas existem');
           dbInitialized = true;
           return true;
@@ -108,6 +142,26 @@ export async function ensureDatabase() {
       try {
         await prisma.$connect();
         await prisma.strategy.count();
+        try {
+          await prisma.symbolUniverse.count();
+        } catch {
+          console.log('⚠️  SQLite: SymbolUniverse em falta. Aplicando db push...');
+          execSync('npx prisma db push', {
+            stdio: 'pipe',
+            cwd: process.cwd(),
+            env: { ...process.env },
+          });
+        }
+        try {
+          await prisma.$queryRawUnsafe(`SELECT symbolUniverseId FROM Strategy LIMIT 1`);
+        } catch {
+          console.log('⚠️  SQLite: coluna symbolUniverseId em falta. Aplicando db push...');
+          execSync('npx prisma db push', {
+            stdio: 'pipe',
+            cwd: process.cwd(),
+            env: { ...process.env },
+          });
+        }
         dbInitialized = true;
         console.log('✅ Banco de dados conectado e pronto');
         return true;

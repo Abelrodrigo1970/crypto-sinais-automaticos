@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { scanSymbolUniverse } from '@/lib/universeScanner';
+import {
+  getBuiltinScanDefinition,
+  BUILTIN_UNIVERSE_META,
+} from '@/lib/symbolUniverseDefaults';
+import { canQuerySymbolUniverseTable } from '@/lib/strategyQueries';
 
 /**
  * GET ?code=UNIVERSE_ABOVE_MA200_1H — executa o scan e devolve linhas (pode demorar).
+ * Funciona sem tabela SymbolUniverse (usa definições embutidas).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -12,50 +18,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Parâmetro code obrigatório' }, { status: 400 });
     }
 
-    let universe;
-    try {
-      universe = await prisma.symbolUniverse.findUnique({
+    let scanDef = getBuiltinScanDefinition(code);
+    let meta = BUILTIN_UNIVERSE_META[code];
+    let source: 'database' | 'built-in' = 'built-in';
+
+    if (scanDef && (await canQuerySymbolUniverseTable())) {
+      const universe = await prisma.symbolUniverse.findUnique({
         where: { code },
       });
-    } catch (dbErr) {
-      console.error('symbolUniverse.findUnique:', dbErr);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Base de dados sem tabela SymbolUniverse',
-          details: dbErr instanceof Error ? dbErr.message : undefined,
-          hint: 'Corre `npx prisma db push` no servidor e `npx tsx prisma/seed.ts` (ou insere os 2 universos manualmente).',
-        },
-        { status: 503 }
-      );
+      if (universe) {
+        source = 'database';
+        scanDef = {
+          ruleType: universe.ruleType,
+          maPeriod: universe.maPeriod,
+          maxDistancePct: universe.maxDistancePct,
+          timeframe: universe.timeframe,
+          minQuoteVolume: universe.minQuoteVolume,
+          candidateLimit: universe.candidateLimit,
+        };
+        meta = {
+          code: universe.code,
+          displayName: universe.displayName,
+          description: universe.description,
+        };
+      }
     }
 
-    if (!universe) {
+    if (!scanDef || !meta) {
       return NextResponse.json(
         {
-          error: `Universo não encontrado: ${code}`,
-          hint: 'Sem registo na BD — corre o seed ou cria SymbolUniverse com este code.',
+          error: `Código de universo desconhecido: ${code}`,
+          hint: 'Usa UNIVERSE_ABOVE_MA200_1H ou UNIVERSE_NEAR_MA200_PCT10_1H.',
         },
         { status: 404 }
       );
     }
 
-    const rows = await scanSymbolUniverse({
-      ruleType: universe.ruleType,
-      maPeriod: universe.maPeriod,
-      maxDistancePct: universe.maxDistancePct,
-      timeframe: universe.timeframe,
-      minQuoteVolume: universe.minQuoteVolume,
-      candidateLimit: universe.candidateLimit,
-    });
+    const rows = await scanSymbolUniverse(scanDef);
 
     return NextResponse.json({
       success: true,
-      universe: {
-        code: universe.code,
-        displayName: universe.displayName,
-        description: universe.description,
-      },
+      universe: meta,
+      universeSource: source,
+      note:
+        source === 'built-in'
+          ? 'Scan com regras embutidas (BD sem SymbolUniverse ou sem registo). Para ligar estratégias ao universo na BD, corre prisma db push + seed.'
+          : undefined,
       count: rows.length,
       rows,
       scannedAt: new Date().toISOString(),

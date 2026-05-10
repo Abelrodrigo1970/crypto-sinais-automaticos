@@ -3,6 +3,10 @@
  */
 
 import { prisma } from './db';
+import {
+  findStrategiesWithUniverseFallback,
+  type StrategyWithUniverseRow,
+} from './strategyQueries';
 import { scanSymbolUniverseSymbols } from './universeScanner';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsBy24hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
@@ -1062,10 +1066,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
   let signalsCreated = 0;
 
   try {
-    // Busca todas as estratégias ativas
-    let strategies = await prisma.strategy.findMany({
-      where: { isActive: true },
-      include: { symbolUniverse: true },
+    // Estratégias ativas — SELECT legado se symbolUniverseId / SymbolUniverse ainda não existirem na BD
+    let strategies: StrategyWithUniverseRow[] = await findStrategiesWithUniverseFallback({
+      activeOnly: true,
     });
 
     // Excluir estratégias opcionais (ex: VOLUME_SPIKE em cron separado)

@@ -1,24 +1,17 @@
 /**
  * Procura criptos com sinais em todas as estratégias (sem gravar na BD).
  * Para scan rápido usa menos símbolos; aumenta os números abaixo para scan completo.
+ *
+ * Não inicializa SQLite nem corre prisma generate (SKIP_DB_INIT) — evita EPERM no Windows
+ * quando o engine Prisma está bloqueado por outro processo.
  */
 
 import {
   fetchTopSymbolsBy1hPriceChange,
   fetchTopSymbolsBy24hPriceChange,
-  fetchTopSymbolsByVolume,
   type Timeframe,
 } from '../lib/marketData';
-import {
-  runVolumeSpikeStrategy,
-  runMa60CrossoverStrategy,
-  runAfastamentoMedioStrategy,
-  runMacdHistogramStrategy,
-  runMacdHistogramPmoStrategy,
-  fetchSymbolsWithMarketCap,
-  type SignalResult,
-  type StrategyParams,
-} from '../lib/signalEngine';
+import type { SignalResult, StrategyParams } from '../lib/signalEngine';
 
 type StrategyDef = {
   name: string;
@@ -31,78 +24,9 @@ type StrategyDef = {
 
 // Nº de símbolos por estratégia (aumentar para scan completo; reduzir para scan rápido)
 const VOLUME_SYMBOLS = 150;
-const MA60_SYMBOLS = 150; // fetchSymbolsWithMarketCap devolve todos; limitamos no loop
+const MA60_SYMBOLS = 150;
 const AFASTAMENTO_SYMBOLS = 150;
 const MACD_SYMBOLS = 80;
-
-const STRATEGIES: StrategyDef[] = [
-  {
-    name: 'VOLUME_SPIKE',
-    displayName: 'Volume Spike',
-    getSymbols: () => fetchTopSymbolsBy24hPriceChange(VOLUME_SYMBOLS, 100000),
-    timeframes: ['1h'],
-    getParams: () => ({ volumeMultiplier: 6, lookbackHours: 20 }),
-    run: runVolumeSpikeStrategy,
-  },
-  {
-    name: 'MA60_CROSSOVER',
-    displayName: 'MA60 Crossover',
-    getSymbols: async () => (await fetchSymbolsWithMarketCap(70000000)).slice(0, MA60_SYMBOLS),
-    timeframes: ['1h'],
-    getParams: () => ({ maPeriod: 200 }),
-    run: runMa60CrossoverStrategy,
-  },
-  {
-    name: 'AFASTAMENTO_MEDIO',
-    displayName: 'Afastamento médio',
-    getSymbols: async () =>
-      (await fetchSymbolsWithMarketCap(70000000)).slice(0, AFASTAMENTO_SYMBOLS),
-    timeframes: ['1h'],
-    getParams: () => ({
-      maPeriod: 80,
-      smoothPeriod: 7,
-      meanLineType: 'EMA',
-      trendMaType: 'EMA',
-      upperThresholdPct: 60,
-      lowerThresholdPct: -60,
-      buyTrendMaPeriod: 30,
-      buySmoothPrevMax: 2,
-      buySmoothCurrMin: 3,
-      buySmoothLookback: 12,
-      requireSmoothCross: false,
-    }),
-    run: runAfastamentoMedioStrategy,
-  },
-  {
-    name: 'MACD_HISTOGRAM_PMO',
-    displayName: 'MACD Histogram + PMO',
-    getSymbols: () => fetchTopSymbolsBy1hPriceChange(MACD_SYMBOLS, 150),
-    timeframes: ['1h'],
-    getParams: () => ({
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-      pmoBuyThreshold: -0.5,
-      pmoSellThreshold: 0.5,
-      rocPeriodPmo: 35,
-      emaFastPmo: 20,
-    }),
-    run: runMacdHistogramPmoStrategy,
-  },
-  {
-    name: 'MACD_HISTOGRAM',
-    displayName: 'MACD Histogram 4h',
-    getSymbols: () => fetchTopSymbolsBy1hPriceChange(MACD_SYMBOLS, 150),
-    timeframes: ['4h'],
-    getParams: () => ({
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-      earlyEntryThreshold: 0.001,
-    }),
-    run: runMacdHistogramStrategy,
-  },
-];
 
 interface FoundSignal {
   symbol: string;
@@ -114,7 +38,91 @@ interface FoundSignal {
   timeframe: string;
 }
 
+function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[] {
+  const {
+    runVolumeSpikeStrategy,
+    runMa60CrossoverStrategy,
+    runAfastamentoMedioStrategy,
+    runMacdHistogramStrategy,
+    runMacdHistogramPmoStrategy,
+    fetchSymbolsWithMarketCap,
+  } = se;
+
+  return [
+    {
+      name: 'VOLUME_SPIKE',
+      displayName: 'Volume Spike',
+      getSymbols: () => fetchTopSymbolsBy24hPriceChange(VOLUME_SYMBOLS, 100000),
+      timeframes: ['1h'],
+      getParams: () => ({ volumeMultiplier: 6, lookbackHours: 20 }),
+      run: runVolumeSpikeStrategy,
+    },
+    {
+      name: 'MA60_CROSSOVER',
+      displayName: 'MA60 Crossover',
+      getSymbols: async () => (await fetchSymbolsWithMarketCap(70000000)).slice(0, MA60_SYMBOLS),
+      timeframes: ['1h'],
+      getParams: () => ({ maPeriod: 200 }),
+      run: runMa60CrossoverStrategy,
+    },
+    {
+      name: 'AFASTAMENTO_MEDIO',
+      displayName: 'Afastamento médio',
+      getSymbols: async () =>
+        (await fetchSymbolsWithMarketCap(70000000)).slice(0, AFASTAMENTO_SYMBOLS),
+      timeframes: ['1h'],
+      getParams: () => ({
+        maPeriod: 80,
+        smoothPeriod: 7,
+        meanLineType: 'EMA',
+        trendMaType: 'EMA',
+        upperThresholdPct: 60,
+        lowerThresholdPct: -60,
+        buyTrendMaPeriod: 30,
+        buySmoothPrevMax: 2,
+        buySmoothCurrMin: 3,
+        buySmoothLookback: 12,
+        requireSmoothCross: false,
+      }),
+      run: runAfastamentoMedioStrategy,
+    },
+    {
+      name: 'MACD_HISTOGRAM_PMO',
+      displayName: 'MACD Histogram + PMO',
+      getSymbols: () => fetchTopSymbolsBy1hPriceChange(MACD_SYMBOLS, 150),
+      timeframes: ['1h'],
+      getParams: () => ({
+        fastPeriod: 12,
+        slowPeriod: 26,
+        signalPeriod: 9,
+        pmoBuyThreshold: -0.5,
+        pmoSellThreshold: 0.5,
+        rocPeriodPmo: 35,
+        emaFastPmo: 20,
+      }),
+      run: runMacdHistogramPmoStrategy,
+    },
+    {
+      name: 'MACD_HISTOGRAM',
+      displayName: 'MACD Histogram 4h',
+      getSymbols: () => fetchTopSymbolsBy1hPriceChange(MACD_SYMBOLS, 150),
+      timeframes: ['4h'],
+      getParams: () => ({
+        fastPeriod: 12,
+        slowPeriod: 26,
+        signalPeriod: 9,
+        earlyEntryThreshold: 0.001,
+      }),
+      run: runMacdHistogramStrategy,
+    },
+  ];
+}
+
 async function main() {
+  process.env.SKIP_DB_INIT = '1';
+  const signalEngine = await import('../lib/signalEngine');
+  const STRATEGIES = buildStrategies(signalEngine);
+
   console.log('🔍 A procurar criptos com sinais (todas as estratégias)...\n');
 
   const allSignals: FoundSignal[] = [];
@@ -143,7 +151,9 @@ async function main() {
             });
             count++;
             const dir = result.direction === 'BUY' ? '🟢' : '🔴';
-            console.log(`   ${dir} ${symbol} ${result.direction} @ ${result.entryPrice.toFixed(6)} (força ${result.strength})`);
+            console.log(
+              `   ${dir} ${symbol} ${result.direction} @ ${result.entryPrice.toFixed(6)} (força ${result.strength})`
+            );
           }
         } catch (_) {
           // ignorar falha por símbolo
@@ -155,7 +165,6 @@ async function main() {
     console.log(`   → ${count} sinal(is) encontrado(s)\n`);
   }
 
-  // Resumo
   console.log('═'.repeat(80));
   console.log('📋 RESUMO – Criptos com sinais');
   console.log('═'.repeat(80));

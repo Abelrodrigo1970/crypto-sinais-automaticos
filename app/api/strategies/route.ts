@@ -5,7 +5,7 @@ import { findStrategiesWithUniverseFallback } from '@/lib/strategyQueries';
 export async function GET(request: NextRequest) {
   try {
     // Listagem pública — fallback se BD ainda não tiver SymbolUniverse / FK
-    const strategies = await findStrategiesWithUniverseFallback();
+    const strategies = await findStrategiesWithUniverseFallback({ activeOnly: false });
 
     return NextResponse.json({ strategies });
   } catch (error) {

@@ -5,7 +5,7 @@ import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 
 interface SymbolUniverseOption {
-  id: string;
+  id: string | null;
   code: string;
   displayName: string;
 }
@@ -393,11 +393,13 @@ export default function EstrategiasPage() {
                     className="w-full max-w-lg px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                   >
                     <option value="">Predefinição (sem universo Scanner 1/2)</option>
-                    {universes.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.displayName}
-                      </option>
-                    ))}
+                    {universes
+                      .filter((u) => u.id)
+                      .map((u) => (
+                        <option key={u.id!} value={u.id!}>
+                          {u.displayName}
+                        </option>
+                      ))}
                   </select>
                 </div>
 

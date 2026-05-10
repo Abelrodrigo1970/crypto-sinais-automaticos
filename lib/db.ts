@@ -3,7 +3,14 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import './db-init'; // Inicializa banco em background
+
+/**
+ * Scripts como `scripts/scan-signals.ts` definem SKIP_DB_INIT=1 antes de importar módulos que usam Prisma,
+ * para não correr db-init (criar SQLite / prisma generate). No Windows isso evita EPERM ao renomear query_engine DLL.
+ */
+if (process.env.SKIP_DB_INIT !== '1') {
+  void import('./db-init');
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
