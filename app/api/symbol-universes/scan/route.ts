@@ -23,24 +23,28 @@ export async function GET(request: NextRequest) {
     let source: 'database' | 'built-in' = 'built-in';
 
     if (scanDef && (await canQuerySymbolUniverseTable())) {
-      const universe = await prisma.symbolUniverse.findUnique({
-        where: { code },
-      });
-      if (universe) {
-        source = 'database';
-        scanDef = {
-          ruleType: universe.ruleType,
-          maPeriod: universe.maPeriod,
-          maxDistancePct: universe.maxDistancePct,
-          timeframe: universe.timeframe,
-          minQuoteVolume: universe.minQuoteVolume,
-          candidateLimit: universe.candidateLimit,
-        };
-        meta = {
-          code: universe.code,
-          displayName: universe.displayName,
-          description: universe.description,
-        };
+      try {
+        const universe = await prisma.symbolUniverse.findUnique({
+          where: { code },
+        });
+        if (universe) {
+          source = 'database';
+          scanDef = {
+            ruleType: universe.ruleType,
+            maPeriod: universe.maPeriod,
+            maxDistancePct: universe.maxDistancePct,
+            timeframe: universe.timeframe,
+            minQuoteVolume: universe.minQuoteVolume,
+            candidateLimit: universe.candidateLimit,
+          };
+          meta = {
+            code: universe.code,
+            displayName: universe.displayName,
+            description: universe.description,
+          };
+        }
+      } catch {
+        // Drift entre probe e ORM (ex. deploy antigo / schema a meio) — mantém regras embutidas
       }
     }
 
