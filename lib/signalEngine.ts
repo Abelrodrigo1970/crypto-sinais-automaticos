@@ -420,10 +420,10 @@ export async function runMa60CrossoverStrategy(
 
 /**
  * Afastamento médio (TradingView-style): distância % do fecho à média longa (EMA ou SMA, def.: EMA 80),
- * com suavização SMA(smoothPeriod) dessa série ("… 7").
- * COMPRA (como no gráfico Pivot/EMA): cruza acima de buySmoothCurrMin vindo de abaixo,
- * tendo estado na zona ≤ buySmoothPrevMax nos candles anteriores (lookback), e preço acima da média 30 (def.: EMA).
- * VENDA: afastamento cruza acima do limiar superior vs a mesma média longa.
+ * com suavização SMA(smoothPeriod) dessa série (ex.: 7).
+ * COMPRA: só na linha suavizada — no candle anterior ≤ buySmoothPrevMax (def. 2) e no atual ≥ buySmoothCurrMin (def. 3),
+ * e preço acima da média de tendência (def.: EMA 30).
+ * VENDA: afastamento a cru cruza acima do limiar superior vs a mesma média longa (inalterado).
  */
 export async function runAfastamentoMedioStrategy(
   symbol: string,
@@ -441,7 +441,6 @@ export async function runAfastamentoMedioStrategy(
   const buyTrendMaPeriod = Math.max(2, Number(params.buyTrendMaPeriod) || 30);
   const buySmoothPrevMax = Number(params.buySmoothPrevMax ?? 2);
   const buySmoothCurrMin = Number(params.buySmoothCurrMin ?? 3);
-  const buySmoothLookback = Math.max(3, Number(params.buySmoothLookback ?? 12));
   const meanLineType =
     String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
   const trendMaType =
@@ -450,11 +449,10 @@ export async function runAfastamentoMedioStrategy(
     params.requireSmoothCross === true ||
     params.requireSmoothCross === 'true';
 
-  const candlesNeeded =
-    Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + buySmoothLookback + 35;
+  const candlesNeeded = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + 40;
   try {
     const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
-    const minCloses = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + buySmoothLookback + 3;
+    const minCloses = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + 3;
     if (candles.length < minCloses) {
       return null;
     }
@@ -504,14 +502,6 @@ export async function runAfastamentoMedioStrategy(
       return null;
     }
 
-    const recentSmooth: number[] = [];
-    for (let drop = 0; drop < buySmoothLookback; drop++) {
-      const d = distances.slice(0, distances.length - drop);
-      if (d.length < smoothPeriod) break;
-      const s = smaTail(d, smoothPeriod);
-      if (s !== null) recentSmooth.push(s);
-    }
-
     const extraBase = {
       maPeriod,
       smoothPeriod,
@@ -528,7 +518,6 @@ export async function runAfastamentoMedioStrategy(
       lowerThreshold,
       buySmoothPrevMax,
       buySmoothCurrMin,
-      buySmoothLookback,
     };
 
     const crossShort =
@@ -557,13 +546,11 @@ export async function runAfastamentoMedioStrategy(
       };
     }
 
-    const crossedAboveBuyMin =
-      recentSmooth.length >= 2 &&
-      recentSmooth[1] < buySmoothCurrMin &&
-      recentSmooth[0] >= buySmoothCurrMin;
-    const hadSmoothInLowZone = recentSmooth.slice(1).some((s) => s <= buySmoothPrevMax);
+    // Linha «7»: SMA(smoothPeriod) do afastamento %; COMPRA só no passo 2→3 nessa linha.
+    const buyCrossSmooth2To3 =
+      smoothPrev <= buySmoothPrevMax && smoothCurr >= buySmoothCurrMin;
 
-    if (crossedAboveBuyMin && hadSmoothInLowZone && currentPrice > trendAtClose) {
+    if (buyCrossSmooth2To3 && currentPrice > trendAtClose) {
       const stopLoss = currentPrice * 0.96;
       const target1 = currentPrice * 1.2;
       const target2 = target1;
@@ -584,7 +571,7 @@ export async function runAfastamentoMedioStrategy(
         strength,
         extraInfo: JSON.stringify({
           ...extraBase,
-          setup: 'smooth_rise_buy_above_ma30',
+          setup: 'smooth_cross_2_to_3_above_ma30',
         }),
       };
     }

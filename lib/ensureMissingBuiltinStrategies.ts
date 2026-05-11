@@ -94,7 +94,6 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
       buyTrendMaPeriod: 30,
       buySmoothPrevMax: 2,
       buySmoothCurrMin: 3,
-      buySmoothLookback: 12,
       requireSmoothCross: false,
     }),
   },
