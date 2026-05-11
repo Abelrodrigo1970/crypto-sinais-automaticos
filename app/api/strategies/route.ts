@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { ensureMissingBuiltinStrategies } from '@/lib/ensureMissingBuiltinStrategies';
 import { findStrategiesWithUniverseFallback } from '@/lib/strategyQueries';
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureMissingBuiltinStrategies(prisma);
     // Listagem pública — fallback se BD ainda não tiver SymbolUniverse / FK
     const strategies = await findStrategiesWithUniverseFallback({ activeOnly: false });
 

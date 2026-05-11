@@ -3,6 +3,7 @@
  */
 
 import { prisma } from './db';
+import { ensureMissingBuiltinStrategies } from './ensureMissingBuiltinStrategies';
 import {
   findStrategiesWithUniverseFallback,
   type StrategyWithUniverseRow,
@@ -1066,6 +1067,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
   let signalsCreated = 0;
 
   try {
+    await ensureMissingBuiltinStrategies(prisma);
     // Estratégias ativas — SELECT legado se symbolUniverseId / SymbolUniverse ainda não existirem na BD
     let strategies: StrategyWithUniverseRow[] = await findStrategiesWithUniverseFallback({
       activeOnly: true,
