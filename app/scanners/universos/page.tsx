@@ -23,8 +23,16 @@ export default function UniversosMa200Page() {
   const [loading2, setLoading2] = useState(false);
   const [msg1, setMsg1] = useState('');
   const [msg2, setMsg2] = useState('');
-  const [meta1, setMeta1] = useState<{ scannedAt?: string; count?: number }>({});
-  const [meta2, setMeta2] = useState<{ scannedAt?: string; count?: number }>({});
+  const [meta1, setMeta1] = useState<{
+    scannedAt?: string;
+    count?: number;
+    persistLine?: string;
+  }>({});
+  const [meta2, setMeta2] = useState<{
+    scannedAt?: string;
+    count?: number;
+    persistLine?: string;
+  }>({});
 
   const runScan = async (which: '1' | '2') => {
     const code = which === '1' ? SCANNER_1_CODE : SCANNER_2_CODE;
@@ -50,7 +58,13 @@ export default function UniversosMa200Page() {
         return;
       }
       setRows(data.rows || []);
-      setMeta({ scannedAt: data.scannedAt, count: data.count });
+      let persistLine: string | undefined;
+      if (data.persisted === true && data.persistedRunId) {
+        persistLine = `Gravado na BD (execução ${data.persistedRunId.slice(0, 8)}…).`;
+      } else if (data.persistError) {
+        persistLine = `Não foi possível gravar na BD: ${String(data.persistError)}`;
+      }
+      setMeta({ scannedAt: data.scannedAt, count: data.count, persistLine });
     } catch {
       setMsg('Erro de rede ao executar scan');
       setRows([]);
@@ -128,10 +142,23 @@ export default function UniversosMa200Page() {
         )}
 
         {meta.count !== undefined && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            {meta.count} símbolo(s)
-            {meta.scannedAt ? ` · ${new Date(meta.scannedAt).toLocaleString('pt-BR')}` : ''}
-          </p>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 space-y-1">
+            <p>
+              {meta.count} símbolo(s)
+              {meta.scannedAt ? ` · ${new Date(meta.scannedAt).toLocaleString('pt-BR')}` : ''}
+            </p>
+            {meta.persistLine && (
+              <p
+                className={
+                  meta.persistLine.startsWith('Gravado')
+                    ? 'text-green-700 dark:text-green-400'
+                    : 'text-amber-700 dark:text-amber-300'
+                }
+              >
+                {meta.persistLine}
+              </p>
+            )}
+          </div>
         )}
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-x-auto">

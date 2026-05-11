@@ -6,6 +6,7 @@ import {
   BUILTIN_UNIVERSE_META,
 } from '@/lib/symbolUniverseDefaults';
 import { canQuerySymbolUniverseTable } from '@/lib/strategyQueries';
+import { persistUniverseScan } from '@/lib/universeScanPersistence';
 
 /**
  * GET ?code=UNIVERSE_ABOVE_MA200_1H — executa o scan e devolve linhas (pode demorar).
@@ -59,18 +60,28 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = await scanSymbolUniverse(scanDef);
+    const scannedAt = new Date().toISOString();
+
+    const persisted = await persistUniverseScan({
+      universeCode: code,
+      source,
+      rows,
+    });
 
     return NextResponse.json({
       success: true,
       universe: meta,
       universeSource: source,
+      persisted: persisted.ok,
+      persistedRunId: persisted.ok ? persisted.runId : undefined,
+      persistError: persisted.ok ? undefined : persisted.reason,
       note:
         source === 'built-in'
           ? 'Scan com regras embutidas (BD sem SymbolUniverse ou sem registo). Para ligar estratégias ao universo na BD, corre prisma db push + seed.'
           : undefined,
       count: rows.length,
       rows,
-      scannedAt: new Date().toISOString(),
+      scannedAt,
     });
   } catch (error) {
     console.error('Erro no scan de universo:', error);
