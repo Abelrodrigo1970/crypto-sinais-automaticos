@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
@@ -33,6 +33,51 @@ export default function UniversosMa200Page() {
     count?: number;
     persistLine?: string;
   }>({});
+  const [bootstrapping, setBootstrapping] = useState(true);
+
+  const fetchLastPersisted = useCallback(async (which: '1' | '2') => {
+    const code = which === '1' ? SCANNER_1_CODE : SCANNER_2_CODE;
+    const setRows = which === '1' ? setRows1 : setRows2;
+    const setMeta = which === '1' ? setMeta1 : setMeta2;
+    const setMsg = which === '1' ? setMsg1 : setMsg2;
+    setMsg('');
+    try {
+      const res = await fetch(`/api/symbol-universes/last-scan?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || 'Erro ao carregar último scan');
+        return;
+      }
+      if (data.unavailable && data.note) {
+        setRows([]);
+        setMeta({ count: 0, persistLine: data.note });
+        return;
+      }
+      setRows(data.rows || []);
+      if (data.found && data.scannedAt) {
+        setMeta({
+          scannedAt: data.scannedAt,
+          count: data.count ?? (data.rows?.length ?? 0),
+          persistLine: 'Dados do último scan gravado. Usa o botão verde para atualizar.',
+        });
+      } else {
+        setMeta({});
+      }
+    } catch {
+      setMsg('Erro de rede ao carregar último scan');
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await Promise.all([fetchLastPersisted('1'), fetchLastPersisted('2')]);
+      if (!cancelled) setBootstrapping(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchLastPersisted]);
 
   const runScan = async (which: '1' | '2') => {
     const code = which === '1' ? SCANNER_1_CODE : SCANNER_2_CODE;
@@ -64,7 +109,11 @@ export default function UniversosMa200Page() {
       } else if (data.persistError) {
         persistLine = `Não foi possível gravar na BD: ${String(data.persistError)}`;
       }
-      setMeta({ scannedAt: data.scannedAt, count: data.count, persistLine });
+      setMeta({
+        scannedAt: data.scannedAt,
+        count: data.count,
+        persistLine: persistLine ?? 'Scan concluído.',
+      });
     } catch {
       setMsg('Erro de rede ao executar scan');
       setRows([]);
@@ -99,7 +148,9 @@ export default function UniversosMa200Page() {
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           Scanner 1: fecho acima da SMA200 (1h). Scanner 2: afastamento absoluto face à SMA200 ≤ 10%.
-          Universo candidato: até ~400 pares por volume 24h (mín. quote volume configurável na BD).
+          Universo candidato: até ~400 pares por volume 24h (mín. quote volume configurável na BD). A
+          tabela carrega automaticamente o último scan gravado: o Scanner 2 atualiza quando corre o cron de sinais
+          com a estratégia Afastamento médio; o Scanner 1 após clicares em «Executar scan».
         </p>
 
         <div className="flex flex-wrap gap-2 mb-6">
@@ -141,12 +192,14 @@ export default function UniversosMa200Page() {
           </div>
         )}
 
-        {meta.count !== undefined && (
+        {(meta.count !== undefined || meta.scannedAt || meta.persistLine) && (
           <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 space-y-1">
-            <p>
-              {meta.count} símbolo(s)
-              {meta.scannedAt ? ` · ${new Date(meta.scannedAt).toLocaleString('pt-BR')}` : ''}
-            </p>
+            {meta.count !== undefined && (
+              <p>
+                {meta.count} símbolo(s)
+                {meta.scannedAt ? ` · ${new Date(meta.scannedAt).toLocaleString('pt-BR')}` : ''}
+              </p>
+            )}
             {meta.persistLine && (
               <p
                 className={
@@ -175,9 +228,9 @@ export default function UniversosMa200Page() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-gray-500 dark:text-gray-400">
-                    {loading
+                    {loading || bootstrapping
                       ? 'A carregar…'
-                      : 'Sem dados. Clica em «Executar scan» (demora vários minutos).'}
+                      : 'Sem dados gravados ainda. Clica em «Executar scan» para gerar a lista (demora vários minutos).'}
                   </td>
                 </tr>
               ) : (

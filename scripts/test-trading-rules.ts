@@ -19,7 +19,7 @@ const mockSignalOk: SignalForTrading = {
   target2: 60000,
   target3: 60000,
   strength: 75,
-  strategyName: 'Volume Spike 1h',
+  strategyName: 'MA60 Crossover 1h',
   status: 'NEW',
 };
 
@@ -31,7 +31,7 @@ const mockSignalWeak: SignalForTrading = {
 
 const mockSignalWrongStrategy: SignalForTrading = {
   ...mockSignalOk,
-  strategyName: 'RSI',
+  strategyName: 'Volume Spike 1h',
   id: 'test-3',
 };
 
@@ -44,7 +44,7 @@ const mockSignalNotNew: SignalForTrading = {
 async function main() {
   console.log('=== Teste Regras de Trading ===\n');
 
-  console.log('1. Sinal OK (Volume Spike, força 75, NEW):');
+  console.log('1. Sinal OK (MA60 Crossover 1h, força 75, NEW):');
   const c1 = canExecuteSignal(mockSignalOk);
   console.log('   canExecute:', c1);
   const p1 = getExecutionParams(mockSignalOk);
@@ -56,7 +56,7 @@ async function main() {
   console.log('   canExecute:', c2);
   console.log('');
 
-  console.log('3. Sinal RSI (estratégia não permitida):');
+  console.log('3. Sinal Volume Spike legado (estratégia não permitida):');
   const c3 = canExecuteSignal(mockSignalWrongStrategy);
   console.log('   canExecute:', c3);
   console.log('');

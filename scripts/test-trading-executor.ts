@@ -23,7 +23,7 @@ async function main() {
     target2: 60000,
     target3: 60000,
     strength: 75,
-    strategyName: 'Volume Spike 1h',
+    strategyName: 'MA60 Crossover 1h',
     status: 'NEW',
   };
 

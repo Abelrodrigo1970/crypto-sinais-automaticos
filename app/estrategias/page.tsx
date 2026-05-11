@@ -141,8 +141,6 @@ export default function EstrategiasPage() {
 
   const getDefaultParams = (strategyName: string) => {
     switch (strategyName) {
-      case 'RSI':
-        return { period: 14, overbought: 70, oversold: 30 };
       case 'MA_CROSSOVER':
         return { fastPeriod: 9, slowPeriod: 21 };
       case 'MACD':
@@ -157,60 +155,6 @@ export default function EstrategiasPage() {
     const defaults = getDefaultParams(strategy.name);
 
     switch (strategy.name) {
-      case 'RSI':
-        return (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Período
-              </label>
-              <input
-                type="number"
-                defaultValue={params.period || defaults.period}
-                onBlur={(e) =>
-                  handleUpdateParams(strategy, {
-                    ...params,
-                    period: parseInt(e.target.value) || defaults.period,
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Limite de Sobrecompra
-              </label>
-              <input
-                type="number"
-                defaultValue={params.overbought || defaults.overbought}
-                onBlur={(e) =>
-                  handleUpdateParams(strategy, {
-                    ...params,
-                    overbought: parseInt(e.target.value) || defaults.overbought,
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Limite de Sobrevenda
-              </label>
-              <input
-                type="number"
-                defaultValue={params.oversold || defaults.oversold}
-                onBlur={(e) =>
-                  handleUpdateParams(strategy, {
-                    ...params,
-                    oversold: parseInt(e.target.value) || defaults.oversold,
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-        );
-
       case 'MA_CROSSOVER':
         return (
           <div className="space-y-4">

@@ -1,5 +1,5 @@
 /**
- * Executor de sinais Volume Spike.
+ * Executor de sinais para trading automático.
  * executeSignal() = simulação (logs).
  * executeSignalReal() = ordens reais na Binance (apenas Testnet quando TRADING_ENABLED).
  */

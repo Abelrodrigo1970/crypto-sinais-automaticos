@@ -6,11 +6,7 @@
  * quando o engine Prisma está bloqueado por outro processo.
  */
 
-import {
-  fetchTopSymbolsBy1hPriceChange,
-  fetchTopSymbolsBy24hPriceChange,
-  type Timeframe,
-} from '../lib/marketData';
+import { fetchTopSymbolsBy1hPriceChange, type Timeframe } from '../lib/marketData';
 import { getBuiltinScanDefinition } from '../lib/symbolUniverseDefaults';
 import { scanSymbolUniverseSymbols } from '../lib/universeScanner';
 import type { SignalResult, StrategyParams } from '../lib/signalEngine';
@@ -25,7 +21,6 @@ type StrategyDef = {
 };
 
 // Nº de símbolos por estratégia (aumentar para scan completo; reduzir para scan rápido)
-const VOLUME_SYMBOLS = 150;
 const MA60_SYMBOLS = 150;
 const MACD_SYMBOLS = 80;
 
@@ -41,7 +36,6 @@ interface FoundSignal {
 
 function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[] {
   const {
-    runVolumeSpikeStrategy,
     runMa60CrossoverStrategy,
     runAfastamentoMedioStrategy,
     runMacdHistogramStrategy,
@@ -50,14 +44,6 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
   } = se;
 
   return [
-    {
-      name: 'VOLUME_SPIKE',
-      displayName: 'Volume Spike',
-      getSymbols: () => fetchTopSymbolsBy24hPriceChange(VOLUME_SYMBOLS, 100000),
-      timeframes: ['1h'],
-      getParams: () => ({ volumeMultiplier: 6, lookbackHours: 20 }),
-      run: runVolumeSpikeStrategy,
-    },
     {
       name: 'MA60_CROSSOVER',
       displayName: 'MA60 Crossover',

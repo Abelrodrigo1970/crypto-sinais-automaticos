@@ -12,38 +12,12 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
   params: string;
 }> = [
   {
-    name: 'RSI',
-    displayName: 'RSI Sobrecomprado/Sobrevendido',
-    description:
-      'Gera sinais quando o RSI (Relative Strength Index) está sobrecomprado (acima de 70) ou sobrevendido (abaixo de 30).',
-    isActive: true,
-    params: JSON.stringify({ period: 14, overbought: 70, oversold: 30 }),
-  },
-  {
     name: 'MACD_HISTOGRAM',
     displayName: 'Cruzamento do Histograma MACD',
     description:
       'Gera sinais baseado no cruzamento do histograma MACD pela linha zero. Sinal de compra quando histograma cruza de negativo para positivo, e venda quando cruza de positivo para negativo.',
     isActive: true,
     params: JSON.stringify({ fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 }),
-  },
-  {
-    name: 'SCANNER_APLUS',
-    displayName: 'Scanner A+ Trades',
-    description:
-      'Scanner avançado melhorado que identifica setups de alta qualidade (TREND_PULLBACK e BREAKOUT_RETEST) usando análise multi-timeframe (1H + 15m) com sistema de score 0-10. Apenas sinais com score >= 8.5 são gerados. Filtros mais rigorosos para melhor qualidade.',
-    isActive: true,
-    params: JSON.stringify({
-      topSymbolsLimit: 50,
-      minQuoteVolume: 1000000,
-      minATRPercent: 0.5,
-      maxATRPercent: 2.0,
-      minEntryScore: 8.5,
-      topNAlerts: 10,
-      enableBreakoutRetest: true,
-      breakoutPeriod: 48,
-      cooldownMinutes: 120,
-    }),
   },
   {
     name: 'MULTI_TIMEFRAME',
@@ -105,25 +79,15 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     isActive: true,
     params: JSON.stringify({ maPeriod: 200 }),
   },
-  {
-    name: 'VOLUME_SPIKE',
-    displayName: 'Volume Spike 1h',
-    description:
-      'Gera sinais quando o volume do último candle fechado é maior que 12 vezes a média das últimas 20 horas. COMPRA: volume spike com preço a subir. VENDA: volume spike com preço a descer. Timeframe 1h.',
-    isActive: true,
-    params: JSON.stringify({ volumeMultiplier: 12, lookbackHours: 20 }),
-  },
-  {
-    name: 'VOLUME_SPIKE_15M',
-    displayName: '15MVolume',
-    description:
-      'Igual ao Volume Spike 1h mas em timeframe 15m com 15 períodos. Volume do último candle 15m fechado > 12x a média dos últimos 15 candles. COMPRA: preço a subir. VENDA: preço a descer.',
-    isActive: true,
-    params: JSON.stringify({ volumeMultiplier: 12, lookbackPeriods: 15 }),
-  },
 ];
 
+const REMOVED_STRATEGY_NAMES = ['RSI', 'SCANNER_APLUS', 'VOLUME_SPIKE', 'VOLUME_SPIKE_15M'] as const;
+
 export async function ensureMissingBuiltinStrategies(prisma: PrismaClient): Promise<void> {
+  await prisma.strategy.deleteMany({
+    where: { name: { in: [...REMOVED_STRATEGY_NAMES] } },
+  });
+
   for (const def of BUILTIN_STRATEGY_SEEDS) {
     const existing = await prisma.strategy.findUnique({ where: { name: def.name } });
     if (!existing) {

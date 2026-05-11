@@ -1,6 +1,5 @@
 /**
- * Regras de trading para o bot Volume Spike.
- * Fase 2: apenas lógica, sem ordens reais.
+ * Regras de trading para execução automática (Fase 2: apenas lógica, sem ordens reais).
  */
 
 import { getPositionSizeUsdt } from './binanceConfig';
@@ -19,8 +18,15 @@ export interface SignalForTrading {
   status: string;
 }
 
-/** Estratégias permitidas para trading automático */
-const ALLOWED_STRATEGIES = ['Volume Spike', 'Volume Spike 1h', '15MVolume'];
+/** Display names das estratégias ativas (alinhado a `Strategy.displayName` no BD). */
+const ALLOWED_STRATEGIES = [
+  'Cruzamento do Histograma MACD',
+  'Multi-Timeframe 4H+1H',
+  'Price Momentum Oscillator',
+  'MACD Histogram 1h + PMO',
+  'Afastamento médio (80/7)',
+  'MA60 Crossover 1h',
+] as const;
 
 /** Força mínima para executar (70) */
 const MIN_STRENGTH = 70;
@@ -40,10 +46,9 @@ export function canExecuteSignal(signal: SignalForTrading): { ok: boolean; reaso
     return { ok: false, reason: `Força ${signal.strength} < ${MIN_STRENGTH}` };
   }
 
-  const isVolumeSpike = ALLOWED_STRATEGIES.some((s) =>
-    signal.strategyName?.toLowerCase().includes('volume spike')
-  );
-  if (!isVolumeSpike) {
+  const name = signal.strategyName?.trim() ?? '';
+  const allowed = (ALLOWED_STRATEGIES as readonly string[]).includes(name);
+  if (!allowed) {
     return { ok: false, reason: `Estratégia não permitida: ${signal.strategyName}` };
   }
 

@@ -41,7 +41,7 @@ npm run db:generate
 
 ### 4. Popular Estratégias Iniciais
 
-Execute o seed para criar as estratégias padrão (RSI, MA Crossover, MACD):
+Execute o seed para criar as estratégias padrão (MACD histograma, multi-timeframe, PMO, MA60, etc.):
 
 ```bash
 npm run db:seed
@@ -76,7 +76,7 @@ O servidor estará disponível em [http://localhost:3000](http://localhost:3000)
 1. Acesse a página "Estratégias" no menu
 2. Você pode:
    - Ativar/desativar estratégias
-   - Ajustar parâmetros (período RSI, médias móveis, etc.)
+   - Ajustar parâmetros (períodos MACD, médias móveis, universo de símbolos, etc.)
    - Ver descrições de cada estratégia
 
 ## Estrutura do Banco de Dados

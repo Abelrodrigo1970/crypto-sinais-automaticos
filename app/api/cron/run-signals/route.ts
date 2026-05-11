@@ -8,8 +8,8 @@ import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResult
  */
 async function runSignalsInBackground(hour: number, minute: number): Promise<void> {
   try {
-    console.log('[Run-Signals BG] Iniciando MACD, MACD+PMO, MA60...');
-    const signalsCreated = await runAllStrategies({ exclude: ['VOLUME_SPIKE', 'VOLUME_SPIKE_15M'] });
+    console.log('[Run-Signals BG] Iniciando motor de sinais...');
+    const signalsCreated = await runAllStrategies();
 
     const update24h = await update24hResults();
 
@@ -27,10 +27,7 @@ async function runSignalsInBackground(hour: number, minute: number): Promise<voi
 }
 
 /**
- * Endpoint de cron para sinais SEM Volume Spike
- * Volume Spike tem cron separado (/api/cron/run-volume-spike)
- * Resposta imediata - processamento em background evita timeout 502
- * Executa: MACD Histogram, MACD+PMO, MA60 Crossover
+ * Endpoint de cron principal: estratégias ativas em background (evita timeout 502).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -50,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Processamento iniciado em background (MACD, MACD+PMO, MA60)',
+      message: 'Processamento iniciado em background (estratégias ativas)',
       executedAt: now.toISOString(),
       nextExecution: `${(hour + 1) % 24}:00`,
     });

@@ -9,18 +9,15 @@ import {
   type StrategyWithUniverseRow,
 } from './strategyQueries';
 import { getBuiltinScanDefinition } from './symbolUniverseDefaults';
-import { scanSymbolUniverseSymbols } from './universeScanner';
-import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsBy24hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
+import { scanSymbolUniverse, scanSymbolUniverseSymbols } from './universeScanner';
+import { persistUniverseScan } from './universeScanPersistence';
+import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
-import { runScanner } from './scanner';
 import {
   calculateSMA,
   calculateMACD,
   calculatePMO,
-  calculateRSI,
   getCloses,
-  getVolumes,
-  calculateVolumeMA,
   getSmaPercentDistanceSeries,
   getEmaPercentDistanceSeries,
   smaTail,
@@ -585,294 +582,6 @@ export async function runAfastamentoMedioStrategy(
 }
 
 /**
- * Estratégia Volume Spike: Gera sinais quando volume é maior que 12 vezes a média das últimas 20 horas
- * Timeframe 1h - analisa volume das últimas 20 horas
- */
-export async function runVolumeSpikeStrategy(
-  symbol: string,
-  timeframe: Timeframe,
-  params: StrategyParams
-): Promise<SignalResult | null> {
-  // Esta estratégia funciona apenas com timeframe 1h
-  if (timeframe !== '1h') {
-    return null;
-  }
-
-  // Mantemos mínimo 12x para reduzir ruído mesmo se params antigos tiverem 6x.
-  const configuredMultiplier = Number(params.volumeMultiplier ?? 12);
-  const volumeMultiplier = Number.isFinite(configuredMultiplier) && configuredMultiplier > 0
-    ? Math.max(12, configuredMultiplier)
-    : 12;
-  const lookbackHours = params.lookbackHours || 20; // Período para calcular média de volume
-
-  try {
-    // Buscar candles suficientes: 20 para média + 1 candle a avaliar (fechado) + margem
-    // A API Binance devolve o último candle como o candle ATUAL (incompleto). O candle
-    // fechado que queremos avaliar (ex.: 15h-16h) é o penúltimo (index -2).
-    const candlesNeeded = lookbackHours + 5;
-    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
-    
-    // Precisamos de pelo menos: 20 para média + 1 candle fechado a avaliar + 1 último (incompleto)
-    if (candles.length < lookbackHours + 2) {
-      return null;
-    }
-
-    const volumes = getVolumes(candles);
-    // Usar o ÚLTIMO CANDLE FECHADO (penúltimo da lista), não o atual incompleto
-    const lastClosedIndex = volumes.length - 2;
-    const currentVolume = volumes[lastClosedIndex];
-    
-    // Média das 20 horas anteriores ao candle que estamos a avaliar (excluir o incompleto e o que avaliamos)
-    const volumesForAverage = volumes.slice(-lookbackHours - 2, -2); // 20 volumes antes do candle fechado
-    const volumeAverage = calculateVolumeMA(volumesForAverage, lookbackHours);
-    
-    if (volumeAverage === null || volumeAverage === 0) {
-      return null;
-    }
-
-    // Verificar se volume do candle fechado é maior que 12 vezes a média
-    const volumeRatio = currentVolume / volumeAverage;
-    
-    if (volumeRatio < volumeMultiplier) {
-      return null; // Volume não é suficientemente alto
-    }
-
-    // Preço de fecho e anterior do candle que teve o spike (candle fechado)
-    const currentPrice = candles[lastClosedIndex].close;
-    const prevPrice = candles[lastClosedIndex - 1].close;
-    
-    // Determinar direção baseada no movimento de preço
-    // Se preço subiu com volume alto = BUY, se caiu = SELL
-    const priceChange = currentPrice - prevPrice;
-    const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
-
-    // Calcular stop loss e targets: TP1 9%, TP2 20%, 25% às 24h (preço de mercado)
-    if (direction === 'BUY') {
-      const stopLoss = currentPrice * 0.87; // 13% abaixo
-      const target1 = currentPrice * 1.09; // 9% acima
-      const target2 = currentPrice * 1.25; // 25% acima
-      // TP3 = fechar às 24h ao preço que estiver (sem ordem na Binance)
-      const target3: number | undefined = undefined;
-
-      // Força baseada no múltiplo de volume (quanto maior, mais forte)
-      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
-
-      return {
-        direction: 'BUY',
-        entryPrice: currentPrice,
-        stopLoss,
-        target1,
-        target2,
-        target3,
-        strength,
-        extraInfo: JSON.stringify({
-          currentVolume: currentVolume.toFixed(2),
-          volumeAverage: volumeAverage.toFixed(2),
-          volumeRatio: volumeRatio.toFixed(2),
-          volumeMultiplier,
-          lookbackHours,
-          priceChange: priceChange.toFixed(4),
-          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
-        }),
-      };
-    } else {
-      const stopLoss = currentPrice * 1.13; // 13% acima (SELL: stop acima da entrada)
-      const target1 = currentPrice * 0.91; // 9% abaixo
-      const target2 = currentPrice * 0.75; // 25% abaixo
-      const target3: number | undefined = undefined; // TP3 = fechar às 24h ao preço que estiver
-
-      // Força baseada no múltiplo de volume
-      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
-
-      return {
-        direction: 'SELL',
-        entryPrice: currentPrice,
-        stopLoss,
-        target1,
-        target2,
-        target3,
-        strength,
-        extraInfo: JSON.stringify({
-          currentVolume: currentVolume.toFixed(2),
-          volumeAverage: volumeAverage.toFixed(2),
-          volumeRatio: volumeRatio.toFixed(2),
-          volumeMultiplier,
-          lookbackHours,
-          priceChange: priceChange.toFixed(4),
-          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
-        }),
-      };
-    }
-  } catch (error) {
-    console.error(`Erro na estratégia Volume Spike para ${symbol}:`, error);
-    return null;
-  }
-}
-
-/**
- * Estratégia Volume Spike 15m: igual ao Volume Spike 1h mas em 15m com 15 períodos
- * Gera sinais quando volume do último candle 15m fechado é maior que 12x a média dos últimos 15 candles
- */
-export async function runVolumeSpike15mStrategy(
-  symbol: string,
-  timeframe: Timeframe,
-  params: StrategyParams
-): Promise<SignalResult | null> {
-  if (timeframe !== '15m') {
-    return null;
-  }
-
-  // Mantemos mínimo 12x para reduzir ruído mesmo se params antigos tiverem 6x.
-  const configuredMultiplier = Number(params.volumeMultiplier ?? 12);
-  const volumeMultiplier = Number.isFinite(configuredMultiplier) && configuredMultiplier > 0
-    ? Math.max(12, configuredMultiplier)
-    : 12;
-  const lookbackPeriods = params.lookbackPeriods ?? 15;
-
-  try {
-    const candlesNeeded = lookbackPeriods + 5;
-    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
-
-    if (candles.length < lookbackPeriods + 2) {
-      return null;
-    }
-
-    const volumes = getVolumes(candles);
-    const lastClosedIndex = volumes.length - 2;
-    const currentVolume = volumes[lastClosedIndex];
-
-    const volumesForAverage = volumes.slice(-lookbackPeriods - 2, -2);
-    const volumeAverage = calculateVolumeMA(volumesForAverage, lookbackPeriods);
-
-    if (volumeAverage === null || volumeAverage === 0) {
-      return null;
-    }
-
-    const volumeRatio = currentVolume / volumeAverage;
-    if (volumeRatio < volumeMultiplier) {
-      return null;
-    }
-
-    const currentPrice = candles[lastClosedIndex].close;
-    const prevPrice = candles[lastClosedIndex - 1].close;
-    const priceChange = currentPrice - prevPrice;
-    const direction: 'BUY' | 'SELL' = priceChange >= 0 ? 'BUY' : 'SELL';
-
-    if (direction === 'BUY') {
-      const stopLoss = currentPrice * 0.87;
-      const target1 = currentPrice * 1.09;
-      const target2 = currentPrice * 1.25;
-      const target3: number | undefined = undefined;
-      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
-
-      return {
-        direction: 'BUY',
-        entryPrice: currentPrice,
-        stopLoss,
-        target1,
-        target2,
-        target3,
-        strength,
-        extraInfo: JSON.stringify({
-          currentVolume: currentVolume.toFixed(2),
-          volumeAverage: volumeAverage.toFixed(2),
-          volumeRatio: volumeRatio.toFixed(2),
-          volumeMultiplier,
-          lookbackPeriods,
-          priceChange: priceChange.toFixed(4),
-          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
-        }),
-      };
-    } else {
-      const stopLoss = currentPrice * 1.13;
-      const target1 = currentPrice * 0.91;
-      const target2 = currentPrice * 0.75;
-      const target3: number | undefined = undefined;
-      const strength = Math.min(100, Math.max(60, Math.round(60 + (volumeRatio - volumeMultiplier) * 5)));
-
-      return {
-        direction: 'SELL',
-        entryPrice: currentPrice,
-        stopLoss,
-        target1,
-        target2,
-        target3,
-        strength,
-        extraInfo: JSON.stringify({
-          currentVolume: currentVolume.toFixed(2),
-          volumeAverage: volumeAverage.toFixed(2),
-          volumeRatio: volumeRatio.toFixed(2),
-          volumeMultiplier,
-          lookbackPeriods,
-          priceChange: priceChange.toFixed(4),
-          priceChangePercent: ((priceChange / prevPrice) * 100).toFixed(2),
-        }),
-      };
-    }
-  } catch (error) {
-    console.error(`Erro na estratégia Volume Spike 15m para ${symbol}:`, error);
-    return null;
-  }
-}
-
-/**
- * Estratégia RSI: Sobrecomprado (SELL) ou Sobrevendido (BUY)
- * RSI > overbought (70) = SELL, RSI < oversold (30) = BUY
- * Timeframe 1h
- */
-export async function runRsiStrategy(
-  symbol: string,
-  timeframe: Timeframe,
-  params: StrategyParams
-): Promise<SignalResult | null> {
-  if (timeframe !== '1h') return null;
-
-  const period = params.period || 14;
-  const overbought = params.overbought || 70;
-  const oversold = params.oversold || 30;
-
-  try {
-    const candles = await fetchCandles(symbol, timeframe, period + 20);
-    if (candles.length < period + 2) return null;
-
-    const closes = getCloses(candles);
-    const rsi = calculateRSI(closes, period);
-    if (rsi === null) return null;
-
-    const currentPrice = candles[candles.length - 1].close;
-
-    if (rsi < oversold) {
-      return {
-        direction: 'BUY',
-        entryPrice: currentPrice,
-        stopLoss: currentPrice * 0.96,
-        target1: currentPrice * 1.20,
-        target2: currentPrice * 1.20,
-        target3: currentPrice * 1.20,
-        strength: Math.min(100, Math.max(60, Math.round(60 + (oversold - rsi) * 2))),
-        extraInfo: JSON.stringify({ rsi: rsi.toFixed(2), oversold, period }),
-      };
-    }
-    if (rsi > overbought) {
-      return {
-        direction: 'SELL',
-        entryPrice: currentPrice,
-        stopLoss: currentPrice * 1.04,
-        target1: currentPrice * 0.80,
-        target2: currentPrice * 0.80,
-        target3: currentPrice * 0.80,
-        strength: Math.min(100, Math.max(60, Math.round(60 + (rsi - overbought) * 2))),
-        extraInfo: JSON.stringify({ rsi: rsi.toFixed(2), overbought, period }),
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error(`Erro na estratégia RSI para ${symbol}:`, error);
-    return null;
-  }
-}
-
-/**
  * Estratégia PMO: Cruzamento da linha zero
  * PMO cruza acima de zero = BUY, cruza abaixo = SELL
  * Timeframe 4h, horários: 8h, 12h, 16h, 20h, 23h
@@ -1043,13 +752,13 @@ function isAllowedTime(): boolean {
 
 
 export interface RunAllStrategiesOptions {
-  /** Estratégias a excluir (ex: ['VOLUME_SPIKE'] para dividir em cron separado) */
+  /** Estratégias a excluir por nome (opcional) */
   exclude?: string[];
 }
 
 /**
  * Função principal que executa todas as estratégias ativas
- * @param options.exclude - Nomes de estratégias a excluir (ex: ['VOLUME_SPIKE'])
+ * @param options.exclude - Nomes de estratégias a excluir
  */
 export async function runAllStrategies(options?: RunAllStrategiesOptions): Promise<number> {
   let signalsCreated = 0;
@@ -1061,11 +770,13 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       activeOnly: true,
     });
 
-    // Excluir estratégias opcionais (ex: VOLUME_SPIKE em cron separado)
     if (options?.exclude?.length) {
       strategies = strategies.filter((s) => !options!.exclude!.includes(s.name));
       console.log(`📋 Estratégias excluídas: ${options.exclude.join(', ')}`);
     }
+
+    const removedLegacy = ['RSI', 'SCANNER_APLUS', 'VOLUME_SPIKE', 'VOLUME_SPIKE_15M'];
+    strategies = strategies.filter((s) => !removedLegacy.includes(s.name));
 
     if (strategies.length === 0) {
       console.log('Nenhuma estratégia ativa encontrada');
@@ -1090,9 +801,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
 
       const params = JSON.parse(strategy.params || '{}');
 
-      // VOLUME_SPIKE_15M usa apenas timeframe 15m
-      const timeframesToUse: Timeframe[] =
-        strategy.name === 'VOLUME_SPIKE_15M' ? ['15m'] : timeframes;
+      const timeframesToUse: Timeframe[] = timeframes;
 
       // Universo configurado na BD (Scanner 1 / 2) substitui listagens por defeito
       let symbolsToAnalyze = symbols;
@@ -1120,8 +829,17 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
             '🔍 AFASTAMENTO_MEDIO: universo Scanner 2 (±10% da SMA200 em 1h, top volume)...'
           );
           try {
-            symbolsToAnalyze = await scanSymbolUniverseSymbols(scan2);
+            const scanRows = await scanSymbolUniverse(scan2);
+            symbolsToAnalyze = scanRows.map((r) => r.symbol);
             console.log(`✅ ${symbolsToAnalyze.length} símbolos após filtro Scanner 2`);
+            const persisted = await persistUniverseScan({
+              universeCode: 'UNIVERSE_NEAR_MA200_PCT10_1H',
+              source: 'signal-engine',
+              rows: scanRows,
+            });
+            if (!persisted.ok) {
+              console.warn('⚠️  Não foi possível gravar o scan na BD (página Universos):', persisted.reason);
+            }
           } catch (e) {
             console.error('Erro ao aplicar Scanner 2 para AFASTAMENTO_MEDIO:', e);
             symbolsToAnalyze = [];
@@ -1139,66 +857,6 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
         } else {
           console.warn('⚠️  Nenhum símbolo com market cap > 70 milhões encontrado, usando lista padrão');
         }
-      } else if (strategy.name === 'VOLUME_SPIKE' || strategy.name === 'VOLUME_SPIKE_15M') {
-        const maxSymbols = 500;
-        const minQuoteVolume = 100000;
-        console.log(`🔍 Buscando símbolos por % variação 24h para estratégia ${strategy.name}...`);
-        const volumeSymbols = await fetchTopSymbolsBy24hPriceChange(maxSymbols, minQuoteVolume);
-        if (volumeSymbols.length > 0) {
-          symbolsToAnalyze = volumeSymbols;
-          console.log(`✅ Encontrados ${volumeSymbols.length} símbolos (top por % 24h)`);
-        }
-      }
-
-      // SCANNER_APLUS: execução especial (tem seu próprio loop de símbolos)
-      if (strategy.name === 'SCANNER_APLUS') {
-        try {
-          const scannerConfig = {
-            topSymbolsLimit: params.topSymbolsLimit || 50,
-            minQuoteVolume: params.minQuoteVolume || 1000000,
-            minScore: params.minEntryScore ?? params.minScore ?? 8.5,
-            topResultsLimit: params.topNAlerts || 10,
-            enableBreakoutRetest: params.enableBreakoutRetest !== false,
-            cooldownMinutes: params.cooldownMinutes || 120,
-          };
-          const { entries } = await runScanner(scannerConfig);
-          for (const alert of entries) {
-            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-            const existing = await prisma.signal.findFirst({
-              where: {
-                symbol: alert.symbol,
-                strategyId: strategy.id,
-                timeframe: '15m',
-                direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
-                generatedAt: { gte: twoHoursAgo },
-              },
-            });
-            if (!existing) {
-              await prisma.signal.create({
-                data: {
-                  symbol: alert.symbol,
-                  direction: alert.side === 'LONG' ? 'BUY' : 'SELL',
-                  timeframe: '15m',
-                  strategyId: strategy.id,
-                  strategyName: strategy.displayName,
-                  entryPrice: alert.entry,
-                  stopLoss: alert.stop,
-                  target1: alert.t1,
-                  target2: alert.t2,
-                  target3: alert.t2,
-                  strength: Math.min(100, Math.round(alert.score * 10)),
-                  status: 'NEW',
-                  extraInfo: JSON.stringify({ setup: alert.setup, reasons: alert.reasons }),
-                },
-              });
-              signalsCreated++;
-              console.log(`✅ Scanner A+ sinal: ${alert.symbol} ${alert.side}`);
-            }
-          }
-        } catch (err) {
-          console.error('Erro ao executar SCANNER_APLUS:', err);
-        }
-        continue;
       }
 
       for (const symbol of symbolsToAnalyze) {
@@ -1228,24 +886,6 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                   );
                 }
                 break;
-              case 'VOLUME_SPIKE':
-                signalResult = await runVolumeSpikeStrategy(symbol, timeframe, params);
-                if (signalResult) {
-                  console.log(`✅ Volume Spike sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
-                }
-                break;
-              case 'VOLUME_SPIKE_15M':
-                signalResult = await runVolumeSpike15mStrategy(symbol, timeframe, params);
-                if (signalResult) {
-                  console.log(`✅ Volume Spike 15m sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
-                }
-                break;
-              case 'RSI':
-                signalResult = await runRsiStrategy(symbol, timeframe, params);
-                if (signalResult) {
-                  console.log(`✅ RSI sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
-                }
-                break;
               case 'PMO':
                 signalResult = await runPmoStrategy(symbol, timeframe, params);
                 if (signalResult) {
@@ -1257,9 +897,6 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 if (signalResult) {
                   console.log(`✅ Multi-Timeframe sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`);
                 }
-                break;
-              case 'SCANNER_APLUS':
-                // Processado no bloco especial acima - não deve chegar aqui
                 break;
               default:
                 if (!unknownStrategiesLogged.has(strategy.name)) {
