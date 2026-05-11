@@ -11,6 +11,8 @@ import {
   fetchTopSymbolsBy24hPriceChange,
   type Timeframe,
 } from '../lib/marketData';
+import { getBuiltinScanDefinition } from '../lib/symbolUniverseDefaults';
+import { scanSymbolUniverseSymbols } from '../lib/universeScanner';
 import type { SignalResult, StrategyParams } from '../lib/signalEngine';
 
 type StrategyDef = {
@@ -25,7 +27,6 @@ type StrategyDef = {
 // Nº de símbolos por estratégia (aumentar para scan completo; reduzir para scan rápido)
 const VOLUME_SYMBOLS = 150;
 const MA60_SYMBOLS = 150;
-const AFASTAMENTO_SYMBOLS = 150;
 const MACD_SYMBOLS = 80;
 
 interface FoundSignal {
@@ -68,8 +69,11 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
     {
       name: 'AFASTAMENTO_MEDIO',
       displayName: 'Afastamento médio',
-      getSymbols: async () =>
-        (await fetchSymbolsWithMarketCap(70000000)).slice(0, AFASTAMENTO_SYMBOLS),
+      getSymbols: async () => {
+        const def = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
+        if (!def) return [];
+        return scanSymbolUniverseSymbols(def);
+      },
       timeframes: ['1h'],
       getParams: () => ({
         maPeriod: 80,

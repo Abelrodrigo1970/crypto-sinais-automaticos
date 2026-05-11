@@ -8,6 +8,7 @@ import {
   findStrategiesWithUniverseFallback,
   type StrategyWithUniverseRow,
 } from './strategyQueries';
+import { getBuiltinScanDefinition } from './symbolUniverseDefaults';
 import { scanSymbolUniverseSymbols } from './universeScanner';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, fetchTopSymbolsBy24hPriceChange, fetchTopSymbolsByVolume, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
@@ -1112,10 +1113,25 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           console.error(`Erro ao aplicar universo ${su.code}:`, e);
           symbolsToAnalyze = [];
         }
-      } else if (strategy.name === 'MA60_CROSSOVER' || strategy.name === 'AFASTAMENTO_MEDIO') {
-        const label =
-          strategy.name === 'MA60_CROSSOVER' ? 'MA60_CROSSOVER' : 'AFASTAMENTO_MEDIO';
-        console.log(`🔍 Buscando símbolos com market cap > 70 milhões para estratégia ${label}...`);
+      } else if (strategy.name === 'AFASTAMENTO_MEDIO') {
+        const scan2 = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
+        if (scan2) {
+          console.log(
+            '🔍 AFASTAMENTO_MEDIO: universo Scanner 2 (±10% da SMA200 em 1h, top volume)...'
+          );
+          try {
+            symbolsToAnalyze = await scanSymbolUniverseSymbols(scan2);
+            console.log(`✅ ${symbolsToAnalyze.length} símbolos após filtro Scanner 2`);
+          } catch (e) {
+            console.error('Erro ao aplicar Scanner 2 para AFASTAMENTO_MEDIO:', e);
+            symbolsToAnalyze = [];
+          }
+        } else {
+          console.warn('⚠️  Definição Scanner 2 em falta; AFASTAMENTO_MEDIO sem símbolos');
+          symbolsToAnalyze = [];
+        }
+      } else if (strategy.name === 'MA60_CROSSOVER') {
+        console.log('🔍 Buscando símbolos com market cap > 70 milhões para estratégia MA60_CROSSOVER...');
         const highMarketCapSymbols = await fetchSymbolsWithMarketCap(70000000);
         if (highMarketCapSymbols.length > 0) {
           symbolsToAnalyze = highMarketCapSymbols;

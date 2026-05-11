@@ -82,7 +82,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO',
     displayName: 'Afastamento médio (80/7)',
     description:
-      'EMA80 + suavização 7; COMPRA: cruza 3 após zona ≤2, preço > EMA30. Timeframe 1h; símbolos com market cap > 70M.',
+      'Universo = Scanner 2 (±10% SMA200 em 1h). EMA80 + SMA(7) do afastamento %; COMPRA: linha 7 de ≤2 para ≥3 com preço > EMA30. Timeframe 1h.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
