@@ -38,6 +38,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
   const {
     runMa60CrossoverStrategy,
     runAfastamentoMedioStrategy,
+    runAfastamentoMedio30mStrategy,
     runMacdHistogramStrategy,
     runMacdHistogramPmoStrategy,
     fetchSymbolsWithMarketCap,
@@ -74,6 +75,29 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
         requireSmoothCross: false,
       }),
       run: runAfastamentoMedioStrategy,
+    },
+    {
+      name: 'AFASTAMENTO_MEDIO_30M',
+      displayName: 'Afastamento médio 30m (1→2)',
+      getSymbols: async () => {
+        const def = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
+        if (!def) return [];
+        return scanSymbolUniverseSymbols(def);
+      },
+      timeframes: ['30m'],
+      getParams: () => ({
+        maPeriod: 80,
+        smoothPeriod: 7,
+        meanLineType: 'EMA',
+        trendMaType: 'EMA',
+        upperThresholdPct: 60,
+        lowerThresholdPct: -60,
+        buyTrendMaPeriod: 30,
+        buySmoothPrevMax: 1,
+        buySmoothCurrMin: 2,
+        requireSmoothCross: false,
+      }),
+      run: runAfastamentoMedio30mStrategy,
     },
     {
       name: 'MACD_HISTOGRAM_PMO',

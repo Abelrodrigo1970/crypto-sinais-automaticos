@@ -25,6 +25,7 @@ const ALLOWED_STRATEGIES = [
   'Price Momentum Oscillator',
   'MACD Histogram 1h + PMO',
   'Afastamento médio (80/7)',
+  'Afastamento médio 30m (1→2)',
   'MA60 Crossover 1h',
 ] as const;
 

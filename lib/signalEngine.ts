@@ -581,6 +581,168 @@ export async function runAfastamentoMedioStrategy(
 }
 
 /**
+ * Afastamento médio em 30m: mesma estrutura que 1h (EMA80 + SMA7 do afastamento %).
+ * COMPRA: linha suavizada cruza de ≤ buySmoothPrevMax (def. 1) para ≥ buySmoothCurrMin (def. 2), com preço > média de tendência.
+ * VENDA: igual ao afastamento 1h (cruze do afastamento cru acima do limiar superior).
+ */
+export async function runAfastamentoMedio30mStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '30m') {
+    return null;
+  }
+
+  const maPeriod = Math.max(2, Number(params.maPeriod) || 80);
+  const smoothPeriod = Math.max(2, Number(params.smoothPeriod) || 7);
+  const upperThreshold = Number(params.upperThresholdPct ?? 60);
+  const lowerThreshold = Number(params.lowerThresholdPct ?? -60);
+  const buyTrendMaPeriod = Math.max(2, Number(params.buyTrendMaPeriod) || 30);
+  const buySmoothPrevMax = Number(params.buySmoothPrevMax ?? 1);
+  const buySmoothCurrMin = Number(params.buySmoothCurrMin ?? 2);
+  const meanLineType =
+    String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
+  const trendMaType =
+    String(params.trendMaType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
+  const requireSmoothCross =
+    params.requireSmoothCross === true ||
+    params.requireSmoothCross === 'true';
+
+  const candlesNeeded = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + 40;
+  try {
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+    const minCloses = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + 3;
+    if (candles.length < minCloses) {
+      return null;
+    }
+
+    const closes = getCloses(candles);
+    const distances =
+      meanLineType === 'SMA'
+        ? getSmaPercentDistanceSeries(closes, maPeriod)
+        : getEmaPercentDistanceSeries(closes, maPeriod);
+    if (distances.length < smoothPeriod + 2) {
+      return null;
+    }
+
+    const currDist = distances[distances.length - 1];
+    const prevDist = distances[distances.length - 2];
+
+    const smoothCurr = smaTail(distances, smoothPeriod);
+    const smoothPrev = smaTail(distances.slice(0, -1), smoothPeriod);
+    if (smoothCurr === null || smoothPrev === null) {
+      return null;
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+
+    let meanAtClose: number | null = null;
+    if (meanLineType === 'EMA') {
+      const em = calculateEMA(closes, maPeriod);
+      meanAtClose = em?.length ? em[em.length - 1]! : null;
+    } else {
+      meanAtClose = calculateSMA(closes, maPeriod);
+    }
+
+    let trendAtClose: number | null = null;
+    if (trendMaType === 'EMA') {
+      const em = calculateEMA(closes, buyTrendMaPeriod);
+      trendAtClose = em?.length ? em[em.length - 1]! : null;
+    } else {
+      trendAtClose = calculateSMA(closes, buyTrendMaPeriod);
+    }
+
+    if (
+      meanAtClose === null ||
+      meanAtClose === 0 ||
+      trendAtClose === null ||
+      trendAtClose === 0
+    ) {
+      return null;
+    }
+
+    const extraBase = {
+      maPeriod,
+      smoothPeriod,
+      meanLineType,
+      trendMaType,
+      distancePct: currDist.toFixed(3),
+      prevDistancePct: prevDist.toFixed(3),
+      smoothDistancePct: smoothCurr.toFixed(3),
+      prevSmoothDistancePct: smoothPrev.toFixed(3),
+      meanAtClose: meanAtClose.toFixed(8),
+      trendMaPeriod: buyTrendMaPeriod,
+      trendAtClose: trendAtClose.toFixed(8),
+      upperThreshold,
+      lowerThreshold,
+      buySmoothPrevMax,
+      buySmoothCurrMin,
+    };
+
+    const crossShort =
+      prevDist <= upperThreshold &&
+      currDist > upperThreshold &&
+      (!requireSmoothCross || (smoothPrev <= upperThreshold && smoothCurr > upperThreshold));
+
+    if (crossShort) {
+      const stopLoss = currentPrice * 1.04;
+      const target1 = meanAtClose;
+      const overshoot = currDist - upperThreshold;
+      const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
+
+      return {
+        direction: 'SELL',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2: target1,
+        target3: target1,
+        strength,
+        extraInfo: JSON.stringify({
+          ...extraBase,
+          setup: 'mean_reversion_short_30m',
+        }),
+      };
+    }
+
+    const buyCrossSmooth1To2 =
+      smoothPrev <= buySmoothPrevMax && smoothCurr >= buySmoothCurrMin;
+
+    if (buyCrossSmooth1To2 && currentPrice > trendAtClose) {
+      const stopLoss = currentPrice * 0.96;
+      const target1 = currentPrice * 1.2;
+      const target2 = target1;
+      const target3 = target1;
+      const rise = smoothCurr - smoothPrev;
+      const strength = Math.min(
+        100,
+        Math.max(60, Math.round(65 + Math.min(Math.max(rise, 0) * 10, 25)))
+      );
+
+      return {
+        direction: 'BUY',
+        entryPrice: currentPrice,
+        stopLoss,
+        target1,
+        target2,
+        target3,
+        strength,
+        extraInfo: JSON.stringify({
+          ...extraBase,
+          setup: 'smooth_cross_1_to_2_above_trend_ma_30m',
+        }),
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Erro na estratégia Afastamento Médio 30m para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
  * Estratégia PMO: Cruzamento da linha zero
  * PMO cruza acima de zero = BUY, cruza abaixo = SELL
  * Timeframe 4h, horários: 8h, 12h, 16h, 20h, 23h
@@ -800,7 +962,8 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
 
       const params = JSON.parse(strategy.params || '{}');
 
-      const timeframesToUse: Timeframe[] = timeframes;
+      const timeframesToUse: Timeframe[] =
+        strategy.name === 'AFASTAMENTO_MEDIO_30M' ? ['30m'] : timeframes;
 
       // Universo configurado na BD (Scanner 1 / 2) substitui listagens por defeito
       let symbolsToAnalyze = symbols;
@@ -829,6 +992,21 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
           console.warn(`⚠️  AFASTAMENTO_MEDIO: ${latest.reason}`);
+          symbolsToAnalyze = [];
+        } else {
+          symbolsToAnalyze = latest.symbols;
+          console.log(
+            `✅ ${symbolsToAnalyze.length} símbolos (BD: scan ${latest.scannedAt.toISOString()}, ${latest.rowCount} linhas)`
+          );
+        }
+      } else if (strategy.name === 'AFASTAMENTO_MEDIO_30M') {
+        const code = 'UNIVERSE_NEAR_MA200_PCT10_1H';
+        console.log(
+          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 2 gravado na BD (30m)...'
+        );
+        const latest = await getLatestUniverseScanSymbols(code);
+        if (!latest.ok) {
+          console.warn(`⚠️  AFASTAMENTO_MEDIO_30M: ${latest.reason}`);
           symbolsToAnalyze = [];
         } else {
           symbolsToAnalyze = latest.symbols;
@@ -871,6 +1049,14 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 if (signalResult) {
                   console.log(
                     `✅ Afastamento médio sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`
+                  );
+                }
+                break;
+              case 'AFASTAMENTO_MEDIO_30M':
+                signalResult = await runAfastamentoMedio30mStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(
+                    `✅ Afastamento médio 30m sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`
                   );
                 }
                 break;

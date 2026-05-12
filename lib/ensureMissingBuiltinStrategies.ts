@@ -72,6 +72,25 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     }),
   },
   {
+    name: 'AFASTAMENTO_MEDIO_30M',
+    displayName: 'Afastamento médio 30m (1→2)',
+    description:
+      'Universo = último Scanner 2 na BD (mesmo que 1h). EMA80 + SMA(7) do afastamento % em 30m; COMPRA: linha suavizada passa de ≤1 para ≥2 com preço > EMA30. VENDA: mesmo limiar superior (+60%) que o afastamento 1h.',
+    isActive: true,
+    params: JSON.stringify({
+      maPeriod: 80,
+      smoothPeriod: 7,
+      meanLineType: 'EMA',
+      trendMaType: 'EMA',
+      upperThresholdPct: 60,
+      lowerThresholdPct: -60,
+      buyTrendMaPeriod: 30,
+      buySmoothPrevMax: 1,
+      buySmoothCurrMin: 2,
+      requireSmoothCross: false,
+    }),
+  },
+  {
     name: 'MA60_CROSSOVER',
     displayName: 'MA60 Crossover 1h',
     description:
