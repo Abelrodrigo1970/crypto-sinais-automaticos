@@ -27,10 +27,13 @@ export default function EstrategiasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [binanceExecutionOn, setBinanceExecutionOn] = useState<boolean | null>(null);
+  const [binanceToggleSaving, setBinanceToggleSaving] = useState(false);
 
   useEffect(() => {
     fetchStrategies();
     fetchUniverses();
+    fetchTradingControl();
   }, []);
 
   const fetchUniverses = async () => {
@@ -42,6 +45,47 @@ export default function EstrategiasPage() {
       }
     } catch (error) {
       console.error('Erro ao buscar universos:', error);
+    }
+  };
+
+  const fetchTradingControl = async () => {
+    try {
+      const res = await fetch('/api/trading-control');
+      const data = await res.json();
+      if (res.ok && typeof data.binanceExecutionOn === 'boolean') {
+        setBinanceExecutionOn(data.binanceExecutionOn);
+      } else {
+        setBinanceExecutionOn(true);
+      }
+    } catch {
+      setBinanceExecutionOn(true);
+    }
+  };
+
+  const handleBinanceToggle = async (next: boolean) => {
+    try {
+      setBinanceToggleSaving(true);
+      const res = await fetch('/api/trading-control', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ binanceExecutionOn: next }),
+      });
+      const data = await res.json();
+      if (res.ok && typeof data.binanceExecutionOn === 'boolean') {
+        setBinanceExecutionOn(data.binanceExecutionOn);
+        setMessage(
+          data.binanceExecutionOn
+            ? 'Binance: execução de trades ativada (ON).'
+            : 'Binance: execução de trades em pausa (OFF).'
+        );
+        setTimeout(() => setMessage(''), 4000);
+      } else {
+        setMessage('Erro ao atualizar interruptor Binance');
+      }
+    } catch {
+      setMessage('Erro ao atualizar interruptor Binance');
+    } finally {
+      setBinanceToggleSaving(false);
     }
   };
 
@@ -257,7 +301,50 @@ export default function EstrategiasPage() {
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Estratégias</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Estratégias</h1>
+
+        <div className="mb-8 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Binance Futures</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
+                Interruptor global: em OFF, o botão «Executar trade» nos sinais fica bloqueado e nenhuma ordem
+                real é enviada até voltares a ligar.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span
+                className={`text-sm font-medium ${
+                  binanceExecutionOn === false
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-green-700 dark:text-green-400'
+                }`}
+              >
+                {binanceExecutionOn === null
+                  ? 'A carregar…'
+                  : binanceExecutionOn
+                    ? 'ON'
+                    : 'OFF'}
+              </span>
+              <button
+                type="button"
+                disabled={binanceExecutionOn === null || binanceToggleSaving}
+                onClick={() => handleBinanceToggle(!(binanceExecutionOn ?? true))}
+                className={`min-w-[8.5rem] px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  binanceExecutionOn
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {binanceToggleSaving
+                  ? 'A guardar…'
+                  : binanceExecutionOn
+                    ? 'Pausar (OFF)'
+                    : 'Ativar (ON)'}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {message && (
           <div

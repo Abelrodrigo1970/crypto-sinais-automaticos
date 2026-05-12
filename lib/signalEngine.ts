@@ -8,9 +8,8 @@ import {
   findStrategiesWithUniverseFallback,
   type StrategyWithUniverseRow,
 } from './strategyQueries';
-import { getBuiltinScanDefinition } from './symbolUniverseDefaults';
-import { scanSymbolUniverse, scanSymbolUniverseSymbols } from './universeScanner';
-import { persistUniverseScan } from './universeScanPersistence';
+import { scanSymbolUniverseSymbols } from './universeScanner';
+import { getLatestUniverseScanSymbols } from './universeScanPersistence';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import {
@@ -823,30 +822,19 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           symbolsToAnalyze = [];
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO') {
-        const scan2 = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
-        if (scan2) {
-          console.log(
-            '🔍 AFASTAMENTO_MEDIO: universo Scanner 2 (±10% da SMA200 em 1h, top volume)...'
-          );
-          try {
-            const scanRows = await scanSymbolUniverse(scan2);
-            symbolsToAnalyze = scanRows.map((r) => r.symbol);
-            console.log(`✅ ${symbolsToAnalyze.length} símbolos após filtro Scanner 2`);
-            const persisted = await persistUniverseScan({
-              universeCode: 'UNIVERSE_NEAR_MA200_PCT10_1H',
-              source: 'signal-engine',
-              rows: scanRows,
-            });
-            if (!persisted.ok) {
-              console.warn('⚠️  Não foi possível gravar o scan na BD (página Universos):', persisted.reason);
-            }
-          } catch (e) {
-            console.error('Erro ao aplicar Scanner 2 para AFASTAMENTO_MEDIO:', e);
-            symbolsToAnalyze = [];
-          }
-        } else {
-          console.warn('⚠️  Definição Scanner 2 em falta; AFASTAMENTO_MEDIO sem símbolos');
+        const code = 'UNIVERSE_NEAR_MA200_PCT10_1H';
+        console.log(
+          '🔍 AFASTAMENTO_MEDIO: universo = último scan Scanner 2 gravado na BD (não corre scan ao vivo)...'
+        );
+        const latest = await getLatestUniverseScanSymbols(code);
+        if (!latest.ok) {
+          console.warn(`⚠️  AFASTAMENTO_MEDIO: ${latest.reason}`);
           symbolsToAnalyze = [];
+        } else {
+          symbolsToAnalyze = latest.symbols;
+          console.log(
+            `✅ ${symbolsToAnalyze.length} símbolos (BD: scan ${latest.scannedAt.toISOString()}, ${latest.rowCount} linhas)`
+          );
         }
       } else if (strategy.name === 'MA60_CROSSOVER') {
         console.log('🔍 Buscando símbolos com market cap > 70 milhões para estratégia MA60_CROSSOVER...');

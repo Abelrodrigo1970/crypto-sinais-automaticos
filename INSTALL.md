@@ -30,6 +30,18 @@ ACCESS_CODE="seu-codigo-secreto-aqui"
 
 **Importante:** Altere o `ACCESS_CODE` para um código seguro que você e seus amigos usarão para fazer login.
 
+### Trading na Binance Futures (opcional)
+
+- **Testnet (recomendado para testes):** `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `BINANCE_FUTURES_BASE_URL=https://testnet.binancefuture.com`, `TRADING_ENABLED=true`.
+- **Mainnet (dinheiro real), só Afastamento médio (80/7):** API keys da **conta real** Futures, `TRADING_ENABLED=true`, **não** uses URL de testnet (ou `BINANCE_FUTURES_BASE_URL=https://fapi.binance.com`), e no servidor (ex. Railway):
+
+```env
+BINANCE_MAINNET_TRADING=true
+BINANCE_REAL_TRADING_STRATEGIES=Afastamento médio (80/7)
+```
+
+O nome tem de coincidir **exatamente** com `Strategy.displayName` na base de dados. Na página de detalhe do sinal, o botão «Executar trade» abre MARKET + stop e TPs conforme `lib/tradingExecutor.ts`.
+
 ### 3. Configurar Banco de Dados
 
 Execute os seguintes comandos para criar o banco de dados e gerar o cliente Prisma:

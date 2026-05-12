@@ -36,6 +36,9 @@ export default function SignalDetailPage() {
     canExecute: boolean;
     reason?: string;
     isTestnet?: boolean;
+    mainnetTradingEnabled?: boolean;
+    mainnetStrategyAllowlist?: string[] | null;
+    binancePaused?: boolean;
   } | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeResult, setExecuteResult] = useState<{
@@ -58,6 +61,9 @@ export default function SignalDetailPage() {
           canExecute: data.canExecute ?? false,
           reason: data.reason,
           isTestnet: data.isTestnet,
+          mainnetTradingEnabled: data.mainnetTradingEnabled,
+          mainnetStrategyAllowlist: data.mainnetStrategyAllowlist ?? null,
+          binancePaused: data.binancePaused === true,
         })
       )
       .catch(() => setTradingStatus({ canExecute: false }));
@@ -165,6 +171,15 @@ export default function SignalDetailPage() {
 
   const extraInfo = signal.extraInfo ? JSON.parse(signal.extraInfo) : null;
 
+  const strategyAllowedLive =
+    !tradingStatus?.canExecute
+      ? false
+      : tradingStatus.isTestnet === true
+        ? true
+        : tradingStatus.mainnetStrategyAllowlist == null
+          ? true
+          : (tradingStatus.mainnetStrategyAllowlist?.includes(signal.strategyName) ?? false);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header />
@@ -260,11 +275,23 @@ export default function SignalDetailPage() {
                   {signal.executionOrderId && ` (order ${signal.executionOrderId})`}
                 </p>
               )}
-              {tradingStatus.canExecute && !signal.executedAt && signal.status === 'NEW' && (
+              {tradingStatus.canExecute &&
+                strategyAllowedLive &&
+                !signal.executedAt &&
+                signal.status === 'NEW' && (
                 <>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                    Testnet ativo. Podes executar este sinal na Binance Futures Testnet.
+                    {tradingStatus.isTestnet === true
+                      ? 'Testnet ativa. Podes executar este sinal na Binance Futures Testnet.'
+                      : 'Conta real (Binance Futures mainnet). Confirma margem, alavancagem e risco antes de executar.'}
                   </p>
+                  {tradingStatus.isTestnet === false &&
+                    tradingStatus.mainnetStrategyAllowlist == null && (
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                        Sem BINANCE_REAL_TRADING_STRATEGIES, qualquer estratégia permitida nas regras pode
+                        executar em mainnet. Para só Afastamento médio, define essa variável no servidor.
+                      </p>
+                    )}
                   <button
                     onClick={handleExecuteTrade}
                     disabled={executing || signal.strength < 70}
@@ -279,10 +306,33 @@ export default function SignalDetailPage() {
                   )}
                 </>
               )}
+              {tradingStatus.canExecute &&
+                !strategyAllowedLive &&
+                !signal.executedAt &&
+                signal.status === 'NEW' && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Em mainnet só são executáveis as estratégias listadas em BINANCE_REAL_TRADING_STRATEGIES
+                    {tradingStatus.mainnetStrategyAllowlist?.length
+                      ? `: ${tradingStatus.mainnetStrategyAllowlist.join(', ')}`
+                      : '.'}{' '}
+                    Este sinal é «{signal.strategyName}».
+                  </p>
+                )}
               {!tradingStatus.canExecute && !signal.executedAt && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {tradingStatus.reason ?? 'Trading desativado ou não configurado.'}
-                </p>
+                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                  <p>{tradingStatus.reason ?? 'Trading desativado ou não configurado.'}</p>
+                  {tradingStatus.binancePaused && (
+                    <p>
+                      <Link
+                        href="/estrategias"
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                      >
+                        Abrir Estratégias
+                      </Link>{' '}
+                      para ligar o interruptor Binance (ON).
+                    </p>
+                  )}
+                </div>
               )}
               {!signal.executedAt && signal.status !== 'NEW' && tradingStatus.canExecute && (
                 <p className="text-sm text-gray-500">Este sinal já não está em estado NEW.</p>

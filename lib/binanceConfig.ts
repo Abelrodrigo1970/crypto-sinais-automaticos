@@ -27,6 +27,26 @@ export function isTradingEnabled(): boolean {
   return process.env.TRADING_ENABLED === 'true';
 }
 
+/**
+ * Permite `executeSignalReal` na mainnet (dinheiro real).
+ * Exige também TRADING_ENABLED, API keys e URL que não seja testnet.
+ */
+export function isMainnetTradingEnabled(): boolean {
+  return process.env.BINANCE_MAINNET_TRADING === 'true';
+}
+
+/**
+ * Em mainnet, restringe a quais `Strategy.displayName` podem abrir ordens.
+ * `undefined` (variável ausente) = todas as estratégias já permitidas em `tradingRules`.
+ * String vazia ou só vírgulas = lista vazia (nenhuma estratégia em mainnet até corrigires o .env).
+ */
+export function getMainnetStrategyAllowlist(): string[] | null {
+  const raw = process.env.BINANCE_REAL_TRADING_STRATEGIES;
+  if (raw === undefined) return null;
+  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return parts;
+}
+
 export function getPositionSizeUsdt(): number {
   const val = parseFloat(process.env.POSITION_SIZE_USDT || '100');
   return Number.isFinite(val) && val > 0 ? val : 100;

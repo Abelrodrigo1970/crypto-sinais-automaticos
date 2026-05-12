@@ -64,3 +64,50 @@ export async function persistUniverseScan(
     return { ok: false, reason };
   }
 }
+
+export type LatestUniverseScanResult =
+  | {
+      ok: true;
+      symbols: string[];
+      runId: string;
+      scannedAt: Date;
+      rowCount: number;
+    }
+  | { ok: false; reason: string };
+
+/** Último run gravado para um `universeCode` (ex.: resultado do Scanner 2 na página Universos). */
+export async function getLatestUniverseScanSymbols(
+  universeCode: string
+): Promise<LatestUniverseScanResult> {
+  try {
+    const run = await prisma.universeScanRun.findFirst({
+      where: { universeCode },
+      orderBy: { scannedAt: 'desc' },
+      select: {
+        id: true,
+        scannedAt: true,
+        rowCount: true,
+        rows: { select: { symbol: true } },
+      },
+    });
+    if (!run) {
+      return {
+        ok: false,
+        reason:
+          'Nenhum scan gravado na BD. Execute o Scanner 2 em /scanners/universos (ou API de scan) primeiro.',
+      };
+    }
+    const symbols = run.rows.map((r) => r.symbol);
+    return {
+      ok: true,
+      symbols,
+      runId: run.id,
+      scannedAt: run.scannedAt,
+      rowCount: run.rowCount,
+    };
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error('[getLatestUniverseScanSymbols]', reason);
+    return { ok: false, reason };
+  }
+}

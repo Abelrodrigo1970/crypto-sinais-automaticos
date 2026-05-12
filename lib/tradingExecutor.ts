@@ -1,7 +1,7 @@
 /**
  * Executor de sinais para trading automático.
  * executeSignal() = simulação (logs).
- * executeSignalReal() = ordens reais na Binance (apenas Testnet quando TRADING_ENABLED).
+ * executeSignalReal() = ordens reais na Binance (testnet por defeito; mainnet com BINANCE_MAINNET_TRADING=true).
  */
 
 import {
@@ -16,6 +16,8 @@ import {
   isTradingEnabled,
   hasTradingCredentials,
   isTestnet,
+  isMainnetTradingEnabled,
+  getMainnetStrategyAllowlist,
 } from './binanceConfig';
 import {
   createOrder,
@@ -23,6 +25,7 @@ import {
   getLotSizeStep,
   getTickSize,
 } from './binanceFuturesClient';
+import { getTradingControl } from './tradingControl';
 
 export interface ExecuteResult {
   success: boolean;
@@ -91,7 +94,8 @@ export function executeSignal(signal: SignalForTrading): ExecuteResult {
 
 /**
  * Execução real: cria ordem MARKET (entrada) + STOP_MARKET (stop loss).
- * Só executa se TRADING_ENABLED=true e BINANCE_FUTURES_BASE_URL for Testnet.
+ * Testnet: TRADING_ENABLED + credenciais + URL testnet.
+ * Mainnet: idem + BINANCE_MAINNET_TRADING=true; opcional BINANCE_REAL_TRADING_STRATEGIES (nomes display, vírgulas).
  */
 export async function executeSignalReal(signal: SignalForTrading): Promise<ExecuteResult> {
   const check = canExecuteSignal(toSignalForRules(signal));
@@ -119,12 +123,51 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
     };
   }
 
-  if (!isTestnet()) {
+  const { binanceExecutionOn } = await getTradingControl();
+  if (!binanceExecutionOn) {
     return {
       success: false,
       dryRun: false,
-      message: 'Execução apenas permitida no Testnet. Configure BINANCE_FUTURES_BASE_URL para testnet.binancefuture.com',
+      message: 'Binance em pausa (interruptor OFF na página Estratégias).',
     };
+  }
+
+  const onTestnet = isTestnet();
+  const mainnetUnlocked = !onTestnet && isMainnetTradingEnabled();
+
+  if (!onTestnet && !mainnetUnlocked) {
+    return {
+      success: false,
+      dryRun: false,
+      message:
+        'Mainnet: define BINANCE_MAINNET_TRADING=true para ordens reais (URL típica https://fapi.binance.com). Para testes sem risco, usa BINANCE_FUTURES_BASE_URL=https://testnet.binancefuture.com',
+    };
+  }
+
+  if (mainnetUnlocked) {
+    const allowlist = getMainnetStrategyAllowlist();
+    const name = signal.strategyName?.trim() ?? '';
+    if (allowlist !== null) {
+      if (allowlist.length === 0) {
+        return {
+          success: false,
+          dryRun: false,
+          message:
+            'Mainnet: BINANCE_REAL_TRADING_STRATEGIES está vazio. Define pelo menos um nome, ex.: Afastamento médio (80/7)',
+        };
+      }
+      if (!allowlist.includes(name)) {
+        return {
+          success: false,
+          dryRun: false,
+          message: `Mainnet: só estratégias na lista: ${allowlist.join(', ')}`,
+        };
+      }
+    }
+    console.warn('[TradingExecutor] MAINNET — ordens com dinheiro real.', {
+      symbol: signal.symbol,
+      strategy: name,
+    });
   }
 
   const params = getExecutionParams(toSignalForRules(signal));
@@ -225,28 +268,49 @@ export async function executeSignalReal(signal: SignalForTrading): Promise<Execu
 }
 
 /**
- * Verifica se o executor pode correr (credenciais, TRADING_ENABLED, Testnet).
+ * Verifica se o executor pode correr (credenciais, TRADING_ENABLED, rede).
  */
 export function getExecutorStatus(): {
   hasCredentials: boolean;
   tradingEnabled: boolean;
   isTestnet: boolean;
+  mainnetTradingEnabled: boolean;
+  mainnetStrategyAllowlist: string[] | null;
   ready: boolean;
   reason?: string;
 } {
   const hasCredentials = hasTradingCredentials();
   const tradingEnabled = isTradingEnabled();
   const testnet = isTestnet();
+  const mainnetTradingEnabled = isMainnetTradingEnabled();
+  const mainnetStrategyAllowlist = getMainnetStrategyAllowlist();
+
   let reason: string | undefined;
-  if (!hasCredentials) reason = 'API Key/Secret não configurados';
-  else if (!tradingEnabled) reason = 'TRADING_ENABLED=false';
-  else if (!testnet) reason = 'Apenas Testnet permitido para execução';
+  let ready = false;
+
+  if (!hasCredentials) {
+    reason = 'API Key/Secret não configurados';
+  } else if (!tradingEnabled) {
+    reason = 'TRADING_ENABLED=false';
+  } else if (testnet) {
+    ready = true;
+  } else if (!mainnetTradingEnabled) {
+    reason =
+      'Conta real: ativa BINANCE_MAINNET_TRADING=true (e confirma API keys da mainnet Futures)';
+  } else if (mainnetStrategyAllowlist !== null && mainnetStrategyAllowlist.length === 0) {
+    reason =
+      'Mainnet: preenche BINANCE_REAL_TRADING_STRATEGIES (ex.: Afastamento médio (80/7)) ou remove a variável para permitir todas as estratégias já aceites nas regras';
+  } else {
+    ready = true;
+  }
 
   return {
     hasCredentials,
     tradingEnabled,
     isTestnet: testnet,
-    ready: hasCredentials && tradingEnabled && testnet,
+    mainnetTradingEnabled,
+    mainnetStrategyAllowlist,
+    ready,
     reason,
   };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { executeSignalReal, getExecutorStatus } from '@/lib/tradingExecutor';
+import { getTradingControl } from '@/lib/tradingControl';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,12 +11,23 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const status = getExecutorStatus();
+    const { binanceExecutionOn } = await getTradingControl();
+    const canExecute = status.ready && binanceExecutionOn;
+    const reason = canExecute
+      ? undefined
+      : !binanceExecutionOn
+        ? 'Binance em pausa (página Estratégias — interruptor OFF).'
+        : status.reason;
     return NextResponse.json({
       tradingEnabled: status.tradingEnabled,
       hasCredentials: status.hasCredentials,
       isTestnet: status.isTestnet,
-      canExecute: status.ready,
-      reason: status.reason,
+      mainnetTradingEnabled: status.mainnetTradingEnabled,
+      mainnetStrategyAllowlist: status.mainnetStrategyAllowlist,
+      binanceExecutionOn,
+      binancePaused: !binanceExecutionOn,
+      canExecute,
+      reason,
     });
   } catch (error) {
     console.error('Erro execute-trade GET:', error);
