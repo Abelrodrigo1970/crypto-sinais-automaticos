@@ -7,6 +7,11 @@ import Disclaimer from '@/components/Disclaimer';
 export default function ScannersHubPage() {
   const cards = [
     {
+      href: '/scanners/top-1h-risers',
+      title: 'Top 50 — subida 1h',
+      desc: 'As 50 criptos perpetual USDT com maior ganho % na última hora (velas 1h).',
+    },
+    {
       href: '/scanner',
       title: 'Scanner Trades A+',
       desc: 'Setups TREND_PULLBACK e BREAKOUT_RETEST (15m / score).',

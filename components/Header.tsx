@@ -18,6 +18,7 @@ export default function Header() {
 
   const scannerLinks = [
     { href: '/scanners', label: 'Índice Scanners' },
+    { href: '/scanners/top-1h-risers', label: 'Top 50 subida 1h' },
     { href: '/scanner', label: 'Trades A+' },
     { href: '/scanners/universos', label: 'Universos MA200' },
   ];

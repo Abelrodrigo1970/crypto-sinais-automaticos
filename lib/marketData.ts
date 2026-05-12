@@ -344,6 +344,79 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Linha de ranking por variação % na última hora (velas 1h na Binance Futures).
+ */
+export type Symbol1hRiserRow = {
+  symbol: string;
+  changePercent1h: number;
+  lastClose: number;
+};
+
+async function fetchSorted1hRisers(candidatePool: number): Promise<Symbol1hRiserRow[]> {
+  const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+  if (!response.ok) {
+    throw new Error(`Erro ao buscar exchangeInfo: ${response.statusText}`);
+  }
+  const data = await response.json();
+
+  const usdtPairs: string[] = (data.symbols || [])
+    .filter((s: any) => {
+      return (
+        s.symbol?.endsWith('USDT') &&
+        !s.symbol?.includes('BUSD') &&
+        s.status === 'TRADING' &&
+        (s.contractType === 'PERPETUAL' || !s.contractType)
+      );
+    })
+    .slice(0, candidatePool)
+    .map((s: any) => s.symbol);
+
+  const results: Symbol1hRiserRow[] = [];
+
+  for (let i = 0; i < usdtPairs.length; i++) {
+    const symbol = usdtPairs[i];
+    try {
+      const klinesRes = await fetch(
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=2`
+      );
+      if (!klinesRes.ok) continue;
+      const klines = await klinesRes.json();
+      if (klines.length < 2) continue;
+      const prevClose = parseFloat(klines[0][4]);
+      const lastClose = parseFloat(klines[1][4]);
+      if (prevClose === 0) continue;
+      const changePercent1h = ((lastClose - prevClose) / prevClose) * 100;
+      results.push({ symbol, changePercent1h, lastClose });
+    } catch {
+      // ignorar falha por símbolo
+    }
+    if ((i + 1) % 50 === 0) await delay(100);
+    else await delay(80);
+  }
+  results.sort((a, b) => b.changePercent1h - a.changePercent1h);
+  return results;
+}
+
+/**
+ * Top N pares com maior subida % na última hora (entre os candidatos consultados).
+ * @param onlyPositive se true (defeito), só inclui variação > 0% («a subir»).
+ */
+export async function fetchTopSymbolsBy1hPriceChangeDetailed(
+  limit: number = 50,
+  candidatePool: number = 300,
+  onlyPositive: boolean = true
+): Promise<Symbol1hRiserRow[]> {
+  try {
+    const sorted = await fetchSorted1hRisers(candidatePool);
+    const filtered = onlyPositive ? sorted.filter((r) => r.changePercent1h > 0) : sorted;
+    return filtered.slice(0, limit);
+  } catch (error) {
+    console.error('Erro ao buscar símbolos por variação 1h (detalhe):', error);
+    throw error;
+  }
+}
+
+/**
  * Busca os símbolos com maior variação de preço na última hora (1h).
  * Não usa volume 24h: lista de candidatos vem do exchangeInfo (Binance Futures).
  * Ordena apenas por % de variação na última hora.
@@ -355,47 +428,8 @@ export async function fetchTopSymbolsBy1hPriceChange(
   candidatePool: number = 250
 ): Promise<string[]> {
   try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar exchangeInfo: ${response.statusText}`);
-    }
-    const data = await response.json();
-
-    const usdtPairs: string[] = (data.symbols || [])
-      .filter((s: any) => {
-        return (
-          s.symbol?.endsWith('USDT') &&
-          !s.symbol?.includes('BUSD') &&
-          s.status === 'TRADING' &&
-          (s.contractType === 'PERPETUAL' || !s.contractType)
-        );
-      })
-      .slice(0, candidatePool)
-      .map((s: any) => s.symbol);
-
-    const results: { symbol: string; changePercent1h: number }[] = [];
-
-    for (let i = 0; i < usdtPairs.length; i++) {
-      const symbol = usdtPairs[i];
-      try {
-        const klinesRes = await fetch(
-          `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=2`
-        );
-        if (!klinesRes.ok) continue;
-        const klines = await klinesRes.json();
-        if (klines.length < 2) continue;
-        const prevClose = parseFloat(klines[0][4]);
-        const lastClose = parseFloat(klines[1][4]);
-        if (prevClose === 0) continue;
-        const changePercent1h = ((lastClose - prevClose) / prevClose) * 100;
-        results.push({ symbol, changePercent1h });
-      } catch {
-        // ignorar falha por símbolo
-      }
-      if ((i + 1) % 50 === 0) await delay(100);
-      else await delay(80);
-    }    results.sort((a, b) => b.changePercent1h - a.changePercent1h);
-    return results.slice(0, limit).map((r) => r.symbol);
+    const sorted = await fetchSorted1hRisers(candidatePool);
+    return sorted.slice(0, limit).map((r) => r.symbol);
   } catch (error) {
     console.error('Erro ao buscar símbolos por variação 1h:', error);
     throw error;
