@@ -164,7 +164,7 @@ export default function AnalisePage() {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('limit', '1000');
-      params.append('minStrength', '70');
+      params.append('minStrength', '60');
       params.append('onlyClosed', 'true');
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);

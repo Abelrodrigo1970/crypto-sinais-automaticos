@@ -39,7 +39,7 @@ export default function DashboardPage() {
     direction: '',
     timeframe: '',
     strategy: '',
-    minStrength: '70',
+    minStrength: '60',
   });
 
   const fetchSignals = async () => {
@@ -50,7 +50,7 @@ export default function DashboardPage() {
       if (filters.direction) params.append('direction', filters.direction);
       if (filters.timeframe) params.append('timeframe', filters.timeframe);
       if (filters.strategy) params.append('strategy', filters.strategy);
-      // Enviar minStrength apenas se especificado (removido padrão para teste)
+      // minStrength=0 = sem filtro de força na API
       if (filters.minStrength && filters.minStrength !== '0') {
         params.append('minStrength', filters.minStrength);
       }
@@ -121,7 +121,7 @@ export default function DashboardPage() {
       direction: '',
       timeframe: '',
       strategy: '',
-      minStrength: '70', // Padrão: apenas força >= 70
+      minStrength: '60', // Padrão: força >= 60
     });
   };
 
