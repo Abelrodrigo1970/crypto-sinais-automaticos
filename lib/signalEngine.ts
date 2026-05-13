@@ -10,6 +10,7 @@ import {
 } from './strategyQueries';
 import { scanSymbolUniverseSymbols } from './universeScanner';
 import { getLatestUniverseScanSymbols } from './universeScanPersistence';
+import { UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from './symbolUniverseDefaults';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import {
@@ -965,9 +966,14 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       const timeframesToUse: Timeframe[] =
         strategy.name === 'AFASTAMENTO_MEDIO_30M' ? ['30m'] : timeframes;
 
-      // Universo configurado na BD (Scanner 1 / 2) substitui listagens por defeito
+      // Universo configurado na BD (Scanner 1 / 2 / 3) substitui listagens por defeito.
+      // Afastamento 1h e 30m ignoram symbolUniverse: usam sempre o último scan Scanner 2 (±10% SMA80) gravado na BD.
       let symbolsToAnalyze = symbols;
-      if (strategy.symbolUniverse) {
+      if (
+        strategy.symbolUniverse &&
+        strategy.name !== 'AFASTAMENTO_MEDIO' &&
+        strategy.name !== 'AFASTAMENTO_MEDIO_30M'
+      ) {
         const su = strategy.symbolUniverse;
         console.log(`🔍 Universo «${su.displayName}» (${su.code}) para ${strategy.name}...`);
         try {
@@ -985,9 +991,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           symbolsToAnalyze = [];
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO') {
-        const code = 'UNIVERSE_NEAR_MA200_PCT10_1H';
+        const code = UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80;
         console.log(
-          '🔍 AFASTAMENTO_MEDIO: universo = último scan Scanner 2 gravado na BD (não corre scan ao vivo)...'
+          '🔍 AFASTAMENTO_MEDIO: universo = último scan Scanner 2 (±10% SMA80, 1h) gravado na BD...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
@@ -1000,9 +1006,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           );
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO_30M') {
-        const code = 'UNIVERSE_NEAR_MA200_PCT10_1H';
+        const code = UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80;
         console.log(
-          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 2 gravado na BD (30m)...'
+          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 2 (±10% SMA80, 1h) gravado na BD; sinais em 30m...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {

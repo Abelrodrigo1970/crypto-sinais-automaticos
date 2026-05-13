@@ -7,7 +7,7 @@
  */
 
 import { fetchTopSymbolsBy1hPriceChange, type Timeframe } from '../lib/marketData';
-import { getBuiltinScanDefinition } from '../lib/symbolUniverseDefaults';
+import { getBuiltinScanDefinition, UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from '../lib/symbolUniverseDefaults';
 import { scanSymbolUniverseSymbols } from '../lib/universeScanner';
 import type { SignalResult, StrategyParams } from '../lib/signalEngine';
 
@@ -57,7 +57,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
       name: 'AFASTAMENTO_MEDIO',
       displayName: 'Afastamento médio',
       getSymbols: async () => {
-        const def = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80);
         if (!def) return [];
         return scanSymbolUniverseSymbols(def);
       },
@@ -80,7 +80,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
       name: 'AFASTAMENTO_MEDIO_30M',
       displayName: 'Afastamento médio 30m (1→2)',
       getSymbols: async () => {
-        const def = getBuiltinScanDefinition('UNIVERSE_NEAR_MA200_PCT10_1H');
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80);
         if (!def) return [];
         return scanSymbolUniverseSymbols(def);
       },

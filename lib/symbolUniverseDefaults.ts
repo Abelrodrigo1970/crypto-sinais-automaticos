@@ -5,6 +5,14 @@
 
 import type { UniverseScanDefinition } from './universeScanner';
 
+/**
+ * Scanner 2 na página Universos: |preço − SMA80| / SMA80 × 100 ≤ 10% (velas 1h).
+ * O identificador mantém-se por compatibilidade com a BD (`UniverseScanRun.universeCode`).
+ * Estratégias **Afastamento médio** (1h e 30m) usam o último scan gravado com este código.
+ */
+export const UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 =
+  'UNIVERSE_NEAR_MA200_PCT10_1H' as const;
+
 export const BUILTIN_UNIVERSE_SCAN: Record<string, UniverseScanDefinition> = {
   UNIVERSE_ABOVE_MA200_1H: {
     ruleType: 'ABOVE_MA',

@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
+import { UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from '@/lib/symbolUniverseDefaults';
 
 type TabId = '1' | '2' | '3';
 
 const SCANNER_CODE: Record<TabId, string> = {
   '1': 'UNIVERSE_ABOVE_MA200_1H',
-  '2': 'UNIVERSE_NEAR_MA200_PCT10_1H',
+  '2': UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80,
   '3': 'UNIVERSE_NEAR_MA200_PCT4_1H',
 };
 
@@ -191,9 +192,10 @@ export default function UniversosMa200Page() {
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           Scanner 1: fecho acima da SMA200 (1h). Scanner 2: |afastamento| à SMA80 ≤ 10%. Scanner 3: |afastamento| à
-          SMA80 ≤ 4%. Universo candidato: até ~400 pares por volume 24h. A tabela carrega o último scan gravado; o
-          Scanner 2 também é atualizado quando corre o cron com a estratégia Afastamento médio (universo Scanner 2). Os
-          scanners 1 e 3 atualizam ao clicares em «Executar scan» neste separador.
+          SMA80 ≤ 4%. Universo candidato: até ~400 pares por volume 24h. A tabela mostra o último scan gravado na BD;
+          usa «Executar scan» neste separador para atualizar. As estratégias <strong>Afastamento médio</strong> (1h e
+          30m) leem sempre o último scan do Scanner 2 (±10% SMA80) e <strong>ignoram</strong> qualquer universo associado
+          na página Estratégias.
         </p>
 
         <div className="flex flex-wrap gap-2 mb-6">
