@@ -4,14 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
-import { UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from '@/lib/symbolUniverseDefaults';
+import { UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80, UNIVERSE_CODE_SCANNER_3_MA80_PCT4 } from '@/lib/symbolUniverseDefaults';
 
 type TabId = '1' | '2' | '3';
 
 const SCANNER_CODE: Record<TabId, string> = {
   '1': 'UNIVERSE_ABOVE_MA200_1H',
   '2': UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80,
-  '3': 'UNIVERSE_NEAR_MA200_PCT4_1H',
+  '3': UNIVERSE_CODE_SCANNER_3_MA80_PCT4,
 };
 
 const SCANNER_LABEL: Record<TabId, string> = {

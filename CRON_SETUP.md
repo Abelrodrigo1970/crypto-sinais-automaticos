@@ -2,7 +2,26 @@
 
 O sistema está configurado para executar automaticamente a cada hora entre 8:00 e 23:59.
 
-## Endpoint principal
+## Scanner 3 (MA80 ±4%) — cron opcional
+
+| Endpoint | Função | Tempo estimado |
+|----------|--------|----------------|
+| `/api/cron/scan-scanner-3-ma80` | Atualiza o universo **Scanner 3** (|afastamento| à **SMA80** ≤ **4%**, velas 1h) e grava na BD | vários minutos (corre em **background**; a resposta HTTP é imediata) |
+
+**cron-job.org (exemplo):**
+
+- **Title:** Scanner 3 MA80 ±4%
+- **URL:** `https://SEU_DOMINIO/api/cron/scan-scanner-3-ma80`
+- **Method:** GET
+- **Headers:** `Authorization: Bearer SEU_CRON_SECRET` (igual ao de `run-signals`, se usares `CRON_SECRET` no Railway)
+
+**Alternativa sem cron dedicado:** pedido manual (bloqueia até terminar):
+
+`GET /api/symbol-universes/scan?code=UNIVERSE_NEAR_MA200_PCT4_1H`
+
+---
+
+## Endpoint principal (sinais)
 
 | Endpoint | Estratégias | Tempo estimado | Cron-job.org |
 |----------|-------------|----------------|--------------|

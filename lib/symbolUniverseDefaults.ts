@@ -13,6 +13,10 @@ import type { UniverseScanDefinition } from './universeScanner';
 export const UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 =
   'UNIVERSE_NEAR_MA200_PCT10_1H' as const;
 
+/** Scanner 3 na página Universos: |preço − SMA80| / SMA80 × 100 ≤ 4% (velas 1h). */
+export const UNIVERSE_CODE_SCANNER_3_MA80_PCT4 =
+  'UNIVERSE_NEAR_MA200_PCT4_1H' as const;
+
 export const BUILTIN_UNIVERSE_SCAN: Record<string, UniverseScanDefinition> = {
   UNIVERSE_ABOVE_MA200_1H: {
     ruleType: 'ABOVE_MA',
