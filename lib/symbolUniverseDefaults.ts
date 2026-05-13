@@ -1,6 +1,6 @@
 /**
- * Definições dos scanners MA200 quando a BD ainda não tem SymbolUniverse
- * (ou registo em falta). Deve coincidir com o seed.
+ * Definições dos scanners de universo quando a BD ainda não tem SymbolUniverse
+ * (ou registo em falta). Scanner 1: MA200; scanners 2–3: afastamento % à SMA80. Deve coincidir com o seed.
  */
 
 import type { UniverseScanDefinition } from './universeScanner';
@@ -16,7 +16,7 @@ export const BUILTIN_UNIVERSE_SCAN: Record<string, UniverseScanDefinition> = {
   },
   UNIVERSE_NEAR_MA200_PCT10_1H: {
     ruleType: 'WITHIN_PCT_OF_MA',
-    maPeriod: 200,
+    maPeriod: 80,
     maxDistancePct: 10,
     timeframe: '1h',
     minQuoteVolume: 100000,
@@ -24,7 +24,7 @@ export const BUILTIN_UNIVERSE_SCAN: Record<string, UniverseScanDefinition> = {
   },
   UNIVERSE_NEAR_MA200_PCT4_1H: {
     ruleType: 'WITHIN_PCT_OF_MA',
-    maPeriod: 200,
+    maPeriod: 80,
     maxDistancePct: 4,
     timeframe: '1h',
     minQuoteVolume: 100000,
@@ -44,15 +44,15 @@ export const BUILTIN_UNIVERSE_META: Record<
   },
   UNIVERSE_NEAR_MA200_PCT10_1H: {
     code: 'UNIVERSE_NEAR_MA200_PCT10_1H',
-    displayName: 'Scanner 2 — Até ±10% da MA200 (1h)',
+    displayName: 'Scanner 2 — Até ±10% da MA80 (1h)',
     description:
-      'Preço dentro de ±10% da SMA200 em 1h (|afastamento| ≤ 10%).',
+      'Preço dentro de ±10% da SMA80 em 1h (|afastamento| à MA80 ≤ 10%).',
   },
   UNIVERSE_NEAR_MA200_PCT4_1H: {
     code: 'UNIVERSE_NEAR_MA200_PCT4_1H',
-    displayName: 'Scanner 3 — Até ±4% da MA200 (1h)',
+    displayName: 'Scanner 3 — Até ±4% da MA80 (1h)',
     description:
-      'Preço dentro de ±4% da SMA200 em 1h (|afastamento| ≤ 4%).',
+      'Preço dentro de ±4% da SMA80 em 1h (|afastamento| à MA80 ≤ 4%).',
   },
 };
 

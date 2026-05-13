@@ -15,8 +15,8 @@ const SCANNER_CODE: Record<TabId, string> = {
 
 const SCANNER_LABEL: Record<TabId, string> = {
   '1': 'Scanner 1 — Acima MA200',
-  '2': 'Scanner 2 — ±10% da MA200',
-  '3': 'Scanner 3 — ±4% da MA200',
+  '2': 'Scanner 2 — ±10% da MA80',
+  '3': 'Scanner 3 — ±4% da MA80',
 };
 
 interface ScanRow {
@@ -187,13 +187,13 @@ export default function UniversosMa200Page() {
         </div>
 
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Universos MA200 (Binance Futures USDT)
+          Universos MA200 / MA80 (Binance Futures USDT)
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Scanner 1: fecho acima da SMA200 (1h). Scanner 2: |afastamento| à SMA200 ≤ 10%. Scanner 3: |afastamento| ≤
-          4% (muito junto da média). Universo candidato: até ~400 pares por volume 24h. A tabela carrega o último scan
-          gravado; o Scanner 2 também é atualizado quando corre o cron com a estratégia Afastamento médio (universo
-          Scanner 2). Os scanners 1 e 3 atualizam ao clicares em «Executar scan» neste separador.
+          Scanner 1: fecho acima da SMA200 (1h). Scanner 2: |afastamento| à SMA80 ≤ 10%. Scanner 3: |afastamento| à
+          SMA80 ≤ 4%. Universo candidato: até ~400 pares por volume 24h. A tabela carrega o último scan gravado; o
+          Scanner 2 também é atualizado quando corre o cron com a estratégia Afastamento médio (universo Scanner 2). Os
+          scanners 1 e 3 atualizam ao clicares em «Executar scan» neste separador.
         </p>
 
         <div className="flex flex-wrap gap-2 mb-6">
@@ -255,7 +255,9 @@ export default function UniversosMa200Page() {
               <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
                 <th className="p-3 font-semibold text-gray-900 dark:text-white">Símbolo</th>
                 <th className="p-3 font-semibold text-gray-900 dark:text-white">Fecho</th>
-                <th className="p-3 font-semibold text-gray-900 dark:text-white">MA200</th>
+                <th className="p-3 font-semibold text-gray-900 dark:text-white">
+                  {tab === '1' ? 'MA200' : 'MA80'}
+                </th>
                 <th className="p-3 font-semibold text-gray-900 dark:text-white">Afast. %</th>
               </tr>
             </thead>

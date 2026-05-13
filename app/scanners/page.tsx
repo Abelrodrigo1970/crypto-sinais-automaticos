@@ -19,7 +19,7 @@ export default function ScannersHubPage() {
     {
       href: '/scanners/universos',
       title: 'Universos MA200',
-      desc: 'Lista perpétuos USDT acima da MA200 ou dentro de ±10% da MA200 (1h).',
+      desc: 'Lista perpétuos USDT acima da MA200 ou com afastamento limitado à MA80 (1h).',
     },
   ];
 

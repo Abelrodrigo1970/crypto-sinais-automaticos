@@ -56,7 +56,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO',
     displayName: 'Afastamento médio (80/7)',
     description:
-      'Universo = Scanner 2 (±10% SMA200 em 1h). EMA80 + SMA(7) do afastamento %; COMPRA: linha 7 de ≤2 para ≥3 com preço > EMA30. Timeframe 1h.',
+      'Universo = Scanner 2 (±10% SMA80 em 1h). EMA80 + SMA(7) do afastamento %; COMPRA: linha 7 de ≤2 para ≥3 com preço > EMA30. Timeframe 1h.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
@@ -75,7 +75,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO_30M',
     displayName: 'Afastamento médio 30m (1→2)',
     description:
-      'Universo = último Scanner 2 na BD (mesmo que 1h). EMA80 + SMA(7) do afastamento % em 30m; COMPRA: linha suavizada passa de ≤1 para ≥2 com preço > EMA30. VENDA: mesmo limiar superior (+60%) que o afastamento 1h.',
+      'Universo = último Scanner 2 na BD (±10% SMA80 em 1h). EMA80 + SMA(7) do afastamento % em 30m; COMPRA: linha suavizada passa de ≤1 para ≥2 com preço > EMA30. VENDA: mesmo limiar superior (+60%) que o afastamento 1h.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
