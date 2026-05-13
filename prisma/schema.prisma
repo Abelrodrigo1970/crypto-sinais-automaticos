@@ -67,6 +67,8 @@ model Strategy {
   displayName String   // ex: "RSI Sobrecomprado/Sobrevendido"
   description String
   isActive    Boolean  @default(true)
+  /// Permite enviar ordens Binance para sinais desta estratégia (independente de isActive = gerar sinais).
+  binanceExecutionOn Boolean @default(true)
   params      String   @default("{}") // JSON string com parâmetros
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

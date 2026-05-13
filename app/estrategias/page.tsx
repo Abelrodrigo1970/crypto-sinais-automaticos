@@ -16,6 +16,7 @@ interface Strategy {
   displayName: string;
   description: string;
   isActive: boolean;
+  binanceExecutionOn?: boolean;
   params: string;
   symbolUniverseId?: string | null;
   symbolUniverse?: SymbolUniverseOption | null;
@@ -102,6 +103,36 @@ export default function EstrategiasPage() {
       console.error('Erro ao buscar estratégias:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStrategyBinanceToggle = async (strategy: Strategy, next: boolean) => {
+    try {
+      setSaving(strategy.id);
+      const response = await fetch('/api/strategies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: strategy.id,
+          binanceExecutionOn: next,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchStrategies();
+        setMessage(
+          next
+            ? `Binance ON para «${strategy.displayName}».`
+            : `Binance OFF para «${strategy.displayName}» — sinais desta estratégia não enviam ordens.`
+        );
+        setTimeout(() => setMessage(''), 4000);
+      } else {
+        setMessage('Erro ao atualizar execução Binance da estratégia');
+      }
+    } catch {
+      setMessage('Erro ao atualizar execução Binance da estratégia');
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -309,7 +340,8 @@ export default function EstrategiasPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Binance Futures</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-xl">
                 Interruptor global: em OFF, o botão «Executar trade» nos sinais fica bloqueado e nenhuma ordem
-                real é enviada até voltares a ligar.
+                real é enviada até voltares a ligar. Abaixo, em cada estratégia, podes ligar ou desligar só a
+                execução Binance dessa estratégia (independente de a estratégia estar ativa para gerar sinais).
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
@@ -369,9 +401,9 @@ export default function EstrategiasPage() {
                 key={strategy.id}
                 className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700"
               >
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                       <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                         {strategy.displayName}
                       </h2>
@@ -382,26 +414,59 @@ export default function EstrategiasPage() {
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                         }`}
                       >
-                        {strategy.isActive ? 'Ativa' : 'Inativa'}
+                        {strategy.isActive ? 'Ativa (sinais)' : 'Inativa (sinais)'}
                       </span>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400">{strategy.description}</p>
                   </div>
-                  <button
-                    onClick={() => handleToggleActive(strategy)}
-                    disabled={saving === strategy.id}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      strategy.isActive
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800'
-                    }`}
-                  >
-                    {saving === strategy.id
-                      ? 'Salvando...'
-                      : strategy.isActive
-                      ? 'Desativar'
-                      : 'Ativar'}
-                  </button>
+                  <div className="flex flex-col sm:items-end gap-3 shrink-0">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 py-2">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        Binance (ordens)
+                      </span>
+                      <span
+                        className={`text-xs font-semibold ${
+                          strategy.binanceExecutionOn !== false
+                            ? 'text-green-700 dark:text-green-400'
+                            : 'text-amber-700 dark:text-amber-300'
+                        }`}
+                      >
+                        {strategy.binanceExecutionOn !== false ? 'ON' : 'OFF'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleStrategyBinanceToggle(
+                            strategy,
+                            !(strategy.binanceExecutionOn !== false)
+                          )
+                        }
+                        disabled={saving === strategy.id}
+                        className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 ${
+                          strategy.binanceExecutionOn !== false
+                            ? 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-200'
+                            : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200'
+                        }`}
+                      >
+                        {strategy.binanceExecutionOn !== false ? 'Desligar' : 'Ligar'}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleToggleActive(strategy)}
+                      disabled={saving === strategy.id}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        strategy.isActive
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800'
+                          : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800'
+                      }`}
+                    >
+                      {saving === strategy.id
+                        ? 'Salvando...'
+                        : strategy.isActive
+                          ? 'Desativar sinais'
+                          : 'Ativar sinais'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4">

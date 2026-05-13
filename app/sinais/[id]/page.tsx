@@ -39,6 +39,7 @@ export default function SignalDetailPage() {
     mainnetTradingEnabled?: boolean;
     mainnetStrategyAllowlist?: string[] | null;
     binancePaused?: boolean;
+    strategyBinanceExecutionOn?: boolean;
   } | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeResult, setExecuteResult] = useState<{
@@ -54,7 +55,9 @@ export default function SignalDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
-    fetch('/api/execute-trade')
+    const id = params?.id;
+    if (!id || typeof id !== 'string') return;
+    fetch(`/api/execute-trade?signalId=${encodeURIComponent(id)}`)
       .then((res) => res.json())
       .then((data) =>
         setTradingStatus({
@@ -64,10 +67,11 @@ export default function SignalDetailPage() {
           mainnetTradingEnabled: data.mainnetTradingEnabled,
           mainnetStrategyAllowlist: data.mainnetStrategyAllowlist ?? null,
           binancePaused: data.binancePaused === true,
+          strategyBinanceExecutionOn: data.strategyBinanceExecutionOn,
         })
       )
       .catch(() => setTradingStatus({ canExecute: false }));
-  }, []);
+  }, [params?.id]);
 
   const fetchSignal = async () => {
     try {
@@ -321,6 +325,17 @@ export default function SignalDetailPage() {
               {!tradingStatus.canExecute && !signal.executedAt && (
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                   <p>{tradingStatus.reason ?? 'Trading desativado ou não configurado.'}</p>
+                  {tradingStatus.strategyBinanceExecutionOn === false && (
+                    <p>
+                      <Link
+                        href="/estrategias"
+                        className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                      >
+                        Estratégias
+                      </Link>
+                      : liga «Binance (ordens)» para esta estratégia para permitir executar trades.
+                    </p>
+                  )}
                   {tradingStatus.binancePaused && (
                     <p>
                       <Link
@@ -329,7 +344,7 @@ export default function SignalDetailPage() {
                       >
                         Abrir Estratégias
                       </Link>{' '}
-                      para ligar o interruptor Binance (ON).
+                      para ligar o interruptor Binance global (ON).
                     </p>
                   )}
                 </div>

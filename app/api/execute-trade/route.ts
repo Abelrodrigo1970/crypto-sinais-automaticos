@@ -6,18 +6,42 @@ import { getTradingControl } from '@/lib/tradingControl';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET: Retorna status do executor (se pode executar trades).
+ * GET: status do executor. Query opcional `signalId` — inclui se a estratégia desse sinal permite Binance.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const status = getExecutorStatus();
     const { binanceExecutionOn } = await getTradingControl();
-    const canExecute = status.ready && binanceExecutionOn;
-    const reason = canExecute
-      ? undefined
-      : !binanceExecutionOn
-        ? 'Binance em pausa (página Estratégias — interruptor OFF).'
-        : status.reason;
+
+    const signalId = request.nextUrl.searchParams.get('signalId');
+    let strategyBinanceOn = true;
+    if (signalId) {
+      try {
+        const row = await prisma.signal.findUnique({
+          where: { id: signalId },
+          select: {
+            strategy: { select: { binanceExecutionOn: true } },
+          },
+        });
+        strategyBinanceOn = row?.strategy?.binanceExecutionOn !== false;
+      } catch {
+        strategyBinanceOn = true;
+      }
+    }
+
+    const canExecute = status.ready && binanceExecutionOn && strategyBinanceOn;
+    let reason: string | undefined;
+    if (!canExecute) {
+      if (!binanceExecutionOn) {
+        reason = 'Binance em pausa (página Estratégias — interruptor global OFF).';
+      } else if (!strategyBinanceOn) {
+        reason =
+          'Execução Binance desativada para esta estratégia (Estratégias — interruptor da estratégia OFF).';
+      } else {
+        reason = status.reason;
+      }
+    }
+
     return NextResponse.json({
       tradingEnabled: status.tradingEnabled,
       hasCredentials: status.hasCredentials,
@@ -26,6 +50,7 @@ export async function GET() {
       mainnetStrategyAllowlist: status.mainnetStrategyAllowlist,
       binanceExecutionOn,
       binancePaused: !binanceExecutionOn,
+      strategyBinanceExecutionOn: signalId ? strategyBinanceOn : undefined,
       canExecute,
       reason,
     });
@@ -68,6 +93,7 @@ export async function POST(request: NextRequest) {
         strength: true,
         strategyName: true,
         status: true,
+        strategy: { select: { binanceExecutionOn: true } },
       },
     });
 
@@ -78,6 +104,28 @@ export async function POST(request: NextRequest) {
     if (signal.status === 'IN_PROGRESS') {
       return NextResponse.json(
         { success: false, error: 'Sinal já executado' },
+        { status: 400 }
+      );
+    }
+
+    const { binanceExecutionOn } = await getTradingControl();
+    if (!binanceExecutionOn) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Binance em pausa (interruptor global OFF na página Estratégias).',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (signal.strategy && signal.strategy.binanceExecutionOn === false) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Execução Binance desligada para esta estratégia. Liga o interruptor «Binance» dessa estratégia em Estratégias.',
+        },
         { status: 400 }
       );
     }

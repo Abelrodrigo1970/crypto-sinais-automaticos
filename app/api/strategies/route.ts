@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, isActive, params, symbolUniverseId } = body;
+    const { id, isActive, params, symbolUniverseId, binanceExecutionOn } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -37,6 +37,9 @@ export async function PUT(request: NextRequest) {
     const updateData: any = {};
     if (typeof isActive === 'boolean') {
       updateData.isActive = isActive;
+    }
+    if (typeof binanceExecutionOn === 'boolean') {
+      updateData.binanceExecutionOn = binanceExecutionOn;
     }
     if (params) {
       updateData.params = JSON.stringify(params);
@@ -61,13 +64,14 @@ export async function PUT(request: NextRequest) {
     const schemaIssue =
       msg.includes('symbolUniverse') ||
       msg.includes('SymbolUniverse') ||
+      msg.includes('binanceExecutionOn') ||
       msg.includes('does not exist');
     return NextResponse.json(
       {
         error: 'Erro ao atualizar estratégia',
         details: msg,
         hint: schemaIssue
-          ? 'Na Railway/hosting corre `npx prisma db push` ou migrate para criar SymbolUniverse e symbolUniverseId.'
+          ? 'Na Railway/hosting corre `npx prisma db push` para criar/atualizar colunas (SymbolUniverse, binanceExecutionOn em Strategy, etc.).'
           : undefined,
       },
       { status: 500 }

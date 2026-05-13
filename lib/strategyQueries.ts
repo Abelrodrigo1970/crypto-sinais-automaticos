@@ -49,7 +49,7 @@ async function loadStrategiesRawSql(activeOnly: boolean): Promise<StrategyWithUn
 
   if (dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://')) {
     const filter = activeOnly ? ` WHERE "isActive" = true` : '';
-    const sql = `SELECT id, name, "displayName", description, "isActive", params, "createdAt", "updatedAt" FROM "Strategy"${filter} ORDER BY name ASC`;
+    const sql = `SELECT id, name, "displayName", description, "isActive", COALESCE("binanceExecutionOn", true) AS "binanceExecutionOn", params, "createdAt", "updatedAt" FROM "Strategy"${filter} ORDER BY name ASC`;
     try {
       const rows = await prisma.$queryRawUnsafe<
         Array<{
@@ -58,6 +58,7 @@ async function loadStrategiesRawSql(activeOnly: boolean): Promise<StrategyWithUn
           displayName: string;
           description: string;
           isActive: boolean;
+          binanceExecutionOn: boolean;
           params: string;
           createdAt: Date;
           updatedAt: Date;
@@ -66,6 +67,7 @@ async function loadStrategiesRawSql(activeOnly: boolean): Promise<StrategyWithUn
       return rows.map(
         (r): StrategyWithUniverseRow => ({
           ...r,
+          binanceExecutionOn: r.binanceExecutionOn !== false,
           symbolUniverseId: null,
           symbolUniverse: null,
         })
@@ -79,16 +81,18 @@ async function loadStrategiesRawSql(activeOnly: boolean): Promise<StrategyWithUn
           displayName: string;
           description: string;
           isActive: boolean;
+          binanceExecutionOn: boolean;
           params: string;
           createdAt: Date;
           updatedAt: Date;
         }>
       >(
-        `SELECT id, name, displayName, description, isActive, params, createdAt, updatedAt FROM strategy${filterLoose} ORDER BY name ASC`
+        `SELECT id, name, displayName, description, isActive, COALESCE(binanceExecutionOn, 1) AS binanceExecutionOn, params, createdAt, updatedAt FROM strategy${filterLoose} ORDER BY name ASC`
       );
       return rows.map(
         (r): StrategyWithUniverseRow => ({
           ...r,
+          binanceExecutionOn: Boolean(r.binanceExecutionOn),
           symbolUniverseId: null,
           symbolUniverse: null,
         })
@@ -104,16 +108,18 @@ async function loadStrategiesRawSql(activeOnly: boolean): Promise<StrategyWithUn
       displayName: string;
       description: string;
       isActive: boolean;
+      binanceExecutionOn: number | boolean;
       params: string;
       createdAt: Date;
       updatedAt: Date;
     }>
   >(
-    `SELECT id, name, displayName, description, isActive, params, createdAt, updatedAt FROM Strategy${filter} ORDER BY name ASC`
+    `SELECT id, name, displayName, description, isActive, COALESCE(binanceExecutionOn, 1) AS binanceExecutionOn, params, createdAt, updatedAt FROM Strategy${filter} ORDER BY name ASC`
   );
   return rows.map(
     (r): StrategyWithUniverseRow => ({
       ...r,
+      binanceExecutionOn: Boolean(r.binanceExecutionOn),
       symbolUniverseId: null,
       symbolUniverse: null,
     })
@@ -140,6 +146,7 @@ export type StrategyWithUniverseRow = {
   displayName: string;
   description: string;
   isActive: boolean;
+  binanceExecutionOn: boolean;
   params: string;
   createdAt: Date;
   updatedAt: Date;
