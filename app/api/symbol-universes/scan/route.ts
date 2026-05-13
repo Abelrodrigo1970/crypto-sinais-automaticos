@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: `Código de universo desconhecido: ${code}`,
-          hint: 'Usa UNIVERSE_ABOVE_MA200_1H ou UNIVERSE_NEAR_MA200_PCT10_1H.',
+          hint:
+            'Usa UNIVERSE_ABOVE_MA200_1H, UNIVERSE_NEAR_MA200_PCT10_1H ou UNIVERSE_NEAR_MA200_PCT4_1H.',
         },
         { status: 404 }
       );

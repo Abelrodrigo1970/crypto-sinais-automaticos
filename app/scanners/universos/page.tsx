@@ -5,8 +5,19 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 
-const SCANNER_1_CODE = 'UNIVERSE_ABOVE_MA200_1H';
-const SCANNER_2_CODE = 'UNIVERSE_NEAR_MA200_PCT10_1H';
+type TabId = '1' | '2' | '3';
+
+const SCANNER_CODE: Record<TabId, string> = {
+  '1': 'UNIVERSE_ABOVE_MA200_1H',
+  '2': 'UNIVERSE_NEAR_MA200_PCT10_1H',
+  '3': 'UNIVERSE_NEAR_MA200_PCT4_1H',
+};
+
+const SCANNER_LABEL: Record<TabId, string> = {
+  '1': 'Scanner 1 — Acima MA200',
+  '2': 'Scanner 2 — ±10% da MA200',
+  '3': 'Scanner 3 — ±4% da MA200',
+};
 
 interface ScanRow {
   symbol: string;
@@ -15,63 +26,88 @@ interface ScanRow {
   pctFromMa: number;
 }
 
+interface PanelMeta {
+  scannedAt?: string;
+  count?: number;
+  persistLine?: string;
+}
+
+interface PanelState {
+  rows: ScanRow[];
+  loading: boolean;
+  msg: string;
+  meta: PanelMeta;
+}
+
+const emptyPanel = (): PanelState => ({
+  rows: [],
+  loading: false,
+  msg: '',
+  meta: {},
+});
+
 export default function UniversosMa200Page() {
-  const [tab, setTab] = useState<'1' | '2'>('1');
-  const [rows1, setRows1] = useState<ScanRow[]>([]);
-  const [rows2, setRows2] = useState<ScanRow[]>([]);
-  const [loading1, setLoading1] = useState(false);
-  const [loading2, setLoading2] = useState(false);
-  const [msg1, setMsg1] = useState('');
-  const [msg2, setMsg2] = useState('');
-  const [meta1, setMeta1] = useState<{
-    scannedAt?: string;
-    count?: number;
-    persistLine?: string;
-  }>({});
-  const [meta2, setMeta2] = useState<{
-    scannedAt?: string;
-    count?: number;
-    persistLine?: string;
-  }>({});
+  const [tab, setTab] = useState<TabId>('1');
+  const [panels, setPanels] = useState<Record<TabId, PanelState>>({
+    '1': emptyPanel(),
+    '2': emptyPanel(),
+    '3': emptyPanel(),
+  });
   const [bootstrapping, setBootstrapping] = useState(true);
 
-  const fetchLastPersisted = useCallback(async (which: '1' | '2') => {
-    const code = which === '1' ? SCANNER_1_CODE : SCANNER_2_CODE;
-    const setRows = which === '1' ? setRows1 : setRows2;
-    const setMeta = which === '1' ? setMeta1 : setMeta2;
-    const setMsg = which === '1' ? setMsg1 : setMsg2;
-    setMsg('');
+  const fetchLastPersisted = useCallback(async (t: TabId) => {
+    const code = SCANNER_CODE[t];
+    setPanels((p) => ({ ...p, [t]: { ...p[t], msg: '' } }));
     try {
       const res = await fetch(`/api/symbol-universes/last-scan?code=${encodeURIComponent(code)}`);
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data.error || 'Erro ao carregar último scan');
+        setPanels((prev) => ({
+          ...prev,
+          [t]: { ...prev[t], msg: data.error || 'Erro ao carregar último scan', rows: [], meta: {} },
+        }));
         return;
       }
       if (data.unavailable && data.note) {
-        setRows([]);
-        setMeta({ count: 0, persistLine: data.note });
+        setPanels((prev) => ({
+          ...prev,
+          [t]: {
+            ...prev[t],
+            rows: [],
+            meta: { count: 0, persistLine: data.note },
+          },
+        }));
         return;
       }
-      setRows(data.rows || []);
+      const rows = data.rows || [];
       if (data.found && data.scannedAt) {
-        setMeta({
-          scannedAt: data.scannedAt,
-          count: data.count ?? (data.rows?.length ?? 0),
-          persistLine: 'Dados do último scan gravado. Usa o botão verde para atualizar.',
-        });
+        setPanels((prev) => ({
+          ...prev,
+          [t]: {
+            ...prev[t],
+            rows,
+            meta: {
+              scannedAt: data.scannedAt,
+              count: data.count ?? rows.length,
+              persistLine: 'Dados do último scan gravado. Usa o botão verde para atualizar.',
+            },
+          },
+        }));
       } else {
-        setMeta({});
+        setPanels((prev) => ({ ...prev, [t]: { ...prev[t], rows, meta: {} } }));
       }
     } catch {
-      setMsg('Erro de rede ao carregar último scan');
+      setPanels((prev) => ({
+        ...prev,
+        [t]: { ...prev[t], msg: 'Erro de rede ao carregar último scan' },
+      }));
     }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await Promise.all([fetchLastPersisted('1'), fetchLastPersisted('2')]);
+      await Promise.all([fetchLastPersisted('1'), fetchLastPersisted('2'), fetchLastPersisted('3')]);
       if (!cancelled) setBootstrapping(false);
     })();
     return () => {
@@ -79,15 +115,9 @@ export default function UniversosMa200Page() {
     };
   }, [fetchLastPersisted]);
 
-  const runScan = async (which: '1' | '2') => {
-    const code = which === '1' ? SCANNER_1_CODE : SCANNER_2_CODE;
-    const setLoading = which === '1' ? setLoading1 : setLoading2;
-    const setRows = which === '1' ? setRows1 : setRows2;
-    const setMsg = which === '1' ? setMsg1 : setMsg2;
-    const setMeta = which === '1' ? setMeta1 : setMeta2;
-
-    setLoading(true);
-    setMsg('');
+  const runScan = async (t: TabId) => {
+    const code = SCANNER_CODE[t];
+    setPanels((p) => ({ ...p, [t]: { ...p[t], loading: true, msg: '' } }));
     try {
       const res = await fetch(`/api/symbol-universes/scan?code=${encodeURIComponent(code)}`);
       const data = await res.json();
@@ -97,38 +127,51 @@ export default function UniversosMa200Page() {
           data.details && String(data.details),
           data.hint && String(data.hint),
         ].filter(Boolean);
-        setMsg(parts.join(' — '));
-        setRows([]);
-        setMeta({});
+        setPanels((prev) => ({
+          ...prev,
+          [t]: {
+            ...prev[t],
+            loading: false,
+            msg: parts.join(' — '),
+            rows: [],
+            meta: {},
+          },
+        }));
         return;
       }
-      setRows(data.rows || []);
+      const rows = data.rows || [];
       let persistLine: string | undefined;
       if (data.persisted === true && data.persistedRunId) {
         persistLine = `Gravado na BD (execução ${data.persistedRunId.slice(0, 8)}…).`;
       } else if (data.persistError) {
         persistLine = `Não foi possível gravar na BD: ${String(data.persistError)}`;
       }
-      setMeta({
-        scannedAt: data.scannedAt,
-        count: data.count,
-        persistLine: persistLine ?? 'Scan concluído.',
-      });
+      setPanels((prev) => ({
+        ...prev,
+        [t]: {
+          ...prev[t],
+          loading: false,
+          rows,
+          meta: {
+            scannedAt: data.scannedAt,
+            count: data.count,
+            persistLine: persistLine ?? 'Scan concluído.',
+          },
+        },
+      }));
     } catch {
-      setMsg('Erro de rede ao executar scan');
-      setRows([]);
-    } finally {
-      setLoading(false);
+      setPanels((prev) => ({
+        ...prev,
+        [t]: { ...prev[t], loading: false, msg: 'Erro de rede ao executar scan', rows: [] },
+      }));
     }
   };
 
   const formatPrice = (n: number) =>
     new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(n);
 
-  const rows = tab === '1' ? rows1 : rows2;
-  const loading = tab === '1' ? loading1 : loading2;
-  const msg = tab === '1' ? msg1 : msg2;
-  const meta = tab === '1' ? meta1 : meta2;
+  const active = panels[tab];
+  const { rows, loading, msg, meta } = active;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -147,35 +190,27 @@ export default function UniversosMa200Page() {
           Universos MA200 (Binance Futures USDT)
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Scanner 1: fecho acima da SMA200 (1h). Scanner 2: afastamento absoluto face à SMA200 ≤ 10%.
-          Universo candidato: até ~400 pares por volume 24h (mín. quote volume configurável na BD). A
-          tabela carrega automaticamente o último scan gravado: o Scanner 2 atualiza quando corre o cron de sinais
-          com a estratégia Afastamento médio; o Scanner 1 após clicares em «Executar scan».
+          Scanner 1: fecho acima da SMA200 (1h). Scanner 2: |afastamento| à SMA200 ≤ 10%. Scanner 3: |afastamento| ≤
+          4% (muito junto da média). Universo candidato: até ~400 pares por volume 24h. A tabela carrega o último scan
+          gravado; o Scanner 2 também é atualizado quando corre o cron com a estratégia Afastamento médio (universo
+          Scanner 2). Os scanners 1 e 3 atualizam ao clicares em «Executar scan» neste separador.
         </p>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          <button
-            type="button"
-            onClick={() => setTab('1')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
-              tab === '1'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-            }`}
-          >
-            Scanner 1 — Acima MA200
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('2')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${
-              tab === '2'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-            }`}
-          >
-            Scanner 2 — ±10% da MA200
-          </button>
+          {(['1', '2', '3'] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                tab === id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+              }`}
+            >
+              {SCANNER_LABEL[id]}
+            </button>
+          ))}
           <button
             type="button"
             onClick={() => runScan(tab)}

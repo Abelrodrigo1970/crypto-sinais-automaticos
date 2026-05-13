@@ -22,6 +22,14 @@ export const BUILTIN_UNIVERSE_SCAN: Record<string, UniverseScanDefinition> = {
     minQuoteVolume: 100000,
     candidateLimit: 400,
   },
+  UNIVERSE_NEAR_MA200_PCT4_1H: {
+    ruleType: 'WITHIN_PCT_OF_MA',
+    maPeriod: 200,
+    maxDistancePct: 4,
+    timeframe: '1h',
+    minQuoteVolume: 100000,
+    candidateLimit: 400,
+  },
 };
 
 export const BUILTIN_UNIVERSE_META: Record<
@@ -39,6 +47,12 @@ export const BUILTIN_UNIVERSE_META: Record<
     displayName: 'Scanner 2 — Até ±10% da MA200 (1h)',
     description:
       'Preço dentro de ±10% da SMA200 em 1h (|afastamento| ≤ 10%).',
+  },
+  UNIVERSE_NEAR_MA200_PCT4_1H: {
+    code: 'UNIVERSE_NEAR_MA200_PCT4_1H',
+    displayName: 'Scanner 3 — Até ±4% da MA200 (1h)',
+    description:
+      'Preço dentro de ±4% da SMA200 em 1h (|afastamento| ≤ 4%).',
   },
 };
 
