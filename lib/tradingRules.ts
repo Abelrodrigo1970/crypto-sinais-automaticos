@@ -27,6 +27,7 @@ const ALLOWED_STRATEGIES = [
   'Afastamento médio (80/7)',
   'Afastamento médio 30m (1→2)',
   'MA60 Crossover 1h',
+  'RSI queda de 70 (mín. 4 pts) + afastamento >12% (1h)',
 ] as const;
 
 /** Força mínima para executar (70) */

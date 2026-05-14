@@ -10,13 +10,17 @@ import {
 } from './strategyQueries';
 import { scanSymbolUniverseSymbols } from './universeScanner';
 import { getLatestUniverseScanSymbols } from './universeScanPersistence';
-import { UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from './symbolUniverseDefaults';
+import {
+  UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80,
+  UNIVERSE_CODE_SCANNER_1_ABOVE_MA200,
+} from './symbolUniverseDefaults';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import {
   calculateSMA,
   calculateMACD,
   calculatePMO,
+  calculateRSI,
   getCloses,
   getSmaPercentDistanceSeries,
   getEmaPercentDistanceSeries,
@@ -412,6 +416,121 @@ export async function runMa60CrossoverStrategy(
     return null;
   } catch (error) {
     console.error(`Erro na estratégia MA60 Crossover para ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * RSI 1h — VENDA: RSI estava ≥ limiar sobrecomprado, no candle atual cai para abaixo de 70
+ * com queda de pelo menos `minDropPoints` pontos (ex.: 72→68, 71→67),
+ * e afastamento % do fecho à média longa (def. EMA 80) > `minDistancePct` (ex.: 12%).
+ * SL 6% acima; TP1/2/3 na média longa (mean reversion no mesmo TF).
+ * O universo de símbolos é escolhido em `runAllStrategies`: último scan gravado Scanner 1 (acima MA200, 1h).
+ */
+export async function runRsiOverboughtDrop1hStrategy(
+  symbol: string,
+  timeframe: Timeframe,
+  params: StrategyParams
+): Promise<SignalResult | null> {
+  if (timeframe !== '1h') {
+    return null;
+  }
+
+  const rsiPeriod = Math.max(2, Number(params.rsiPeriod) || 14);
+  const overboughtLevel = Number(params.overboughtLevel ?? 70);
+  const minDropPoints = Math.max(1, Number(params.minDropPoints) || 4);
+  const minDistancePct = Number(params.minDistancePct ?? 12);
+  const maPeriod = Math.max(2, Number(params.maPeriod) || 80);
+  const meanLineType =
+    String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
+  const stopLossPct = Number(params.stopLossPct ?? 0.06);
+
+  const candlesNeeded = Math.max(maPeriod, rsiPeriod) + 50;
+  try {
+    const candles = await fetchCandles(symbol, timeframe, candlesNeeded);
+    if (candles.length < Math.max(maPeriod, rsiPeriod) + 5) {
+      return null;
+    }
+
+    const closes = getCloses(candles);
+    const rsiCurr = calculateRSI(closes, rsiPeriod);
+    const rsiPrev = calculateRSI(closes.slice(0, -1), rsiPeriod);
+    if (rsiCurr === null || rsiPrev === null) {
+      return null;
+    }
+
+    const drop = rsiPrev - rsiCurr;
+    const crossedDownFromOverbought =
+      rsiPrev >= overboughtLevel && rsiCurr < overboughtLevel && drop >= minDropPoints;
+
+    if (!crossedDownFromOverbought) {
+      return null;
+    }
+
+    const distances =
+      meanLineType === 'SMA'
+        ? getSmaPercentDistanceSeries(closes, maPeriod)
+        : getEmaPercentDistanceSeries(closes, maPeriod);
+    if (distances.length < 1) {
+      return null;
+    }
+    const currDist = distances[distances.length - 1];
+    if (!(currDist > minDistancePct)) {
+      return null;
+    }
+
+    let meanAtClose: number | null = null;
+    if (meanLineType === 'EMA') {
+      const em = calculateEMA(closes, maPeriod);
+      meanAtClose = em?.length ? em[em.length - 1]! : null;
+    } else {
+      meanAtClose = calculateSMA(closes, maPeriod);
+    }
+    if (meanAtClose === null || meanAtClose === 0) {
+      return null;
+    }
+
+    const currentPrice = candles[candles.length - 1].close;
+    const stopLoss = currentPrice * (1 + stopLossPct);
+    const target1 = meanAtClose;
+
+    const strength = Math.min(
+      100,
+      Math.max(
+        70,
+        Math.round(
+          70 +
+            Math.min(drop - minDropPoints, 8) * 2 +
+            Math.min(Math.max(currDist - minDistancePct, 0), 18)
+        )
+      )
+    );
+
+    return {
+      direction: 'SELL',
+      entryPrice: currentPrice,
+      stopLoss,
+      target1,
+      target2: target1,
+      target3: target1,
+      strength,
+      extraInfo: JSON.stringify({
+        setup: 'rsi_overbought_drop_distance_ma',
+        rsiPeriod,
+        overboughtLevel,
+        minDropPoints,
+        minDistancePct,
+        rsiPrev: rsiPrev.toFixed(2),
+        rsiCurr: rsiCurr.toFixed(2),
+        drop: drop.toFixed(2),
+        distancePct: currDist.toFixed(3),
+        meanLineType,
+        maPeriod,
+        stopLossPct,
+      }),
+    };
+  } catch (error) {
+    console.error(`Erro na estratégia RSI queda 70 + afastamento para ${symbol}:`, error);
     return null;
   }
 }
@@ -964,15 +1083,20 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
       const params = JSON.parse(strategy.params || '{}');
 
       const timeframesToUse: Timeframe[] =
-        strategy.name === 'AFASTAMENTO_MEDIO_30M' ? ['30m'] : timeframes;
+        strategy.name === 'AFASTAMENTO_MEDIO_30M'
+          ? ['30m']
+          : strategy.name === 'RSI_OVERBOUGHT_DROP_1H'
+            ? ['1h']
+            : timeframes;
 
       // Universo configurado na BD (Scanner 1 / 2 / 3) substitui listagens por defeito.
-      // Afastamento 1h e 30m ignoram symbolUniverse: usam sempre o último scan Scanner 2 (±10% SMA80) gravado na BD.
+      // Afastamento 1h/30m e RSI queda 70 ignoram symbolUniverse: usam último scan gravado (Scanner 2 ou 1).
       let symbolsToAnalyze = symbols;
       if (
         strategy.symbolUniverse &&
         strategy.name !== 'AFASTAMENTO_MEDIO' &&
-        strategy.name !== 'AFASTAMENTO_MEDIO_30M'
+        strategy.name !== 'AFASTAMENTO_MEDIO_30M' &&
+        strategy.name !== 'RSI_OVERBOUGHT_DROP_1H'
       ) {
         const su = strategy.symbolUniverse;
         console.log(`🔍 Universo «${su.displayName}» (${su.code}) para ${strategy.name}...`);
@@ -1013,6 +1137,21 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
           console.warn(`⚠️  AFASTAMENTO_MEDIO_30M: ${latest.reason}`);
+          symbolsToAnalyze = [];
+        } else {
+          symbolsToAnalyze = latest.symbols;
+          console.log(
+            `✅ ${symbolsToAnalyze.length} símbolos (BD: scan ${latest.scannedAt.toISOString()}, ${latest.rowCount} linhas)`
+          );
+        }
+      } else if (strategy.name === 'RSI_OVERBOUGHT_DROP_1H') {
+        const code = UNIVERSE_CODE_SCANNER_1_ABOVE_MA200;
+        console.log(
+          '🔍 RSI_OVERBOUGHT_DROP_1H: universo = último scan Scanner 1 (acima MA200, 1h) gravado na BD...'
+        );
+        const latest = await getLatestUniverseScanSymbols(code);
+        if (!latest.ok) {
+          console.warn(`⚠️  RSI_OVERBOUGHT_DROP_1H: ${latest.reason}`);
           symbolsToAnalyze = [];
         } else {
           symbolsToAnalyze = latest.symbols;
@@ -1063,6 +1202,14 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
                 if (signalResult) {
                   console.log(
                     `✅ Afastamento médio 30m sinal encontrado: ${symbol} ${signalResult.direction} (${timeframe})`
+                  );
+                }
+                break;
+              case 'RSI_OVERBOUGHT_DROP_1H':
+                signalResult = await runRsiOverboughtDrop1hStrategy(symbol, timeframe, params);
+                if (signalResult) {
+                  console.log(
+                    `✅ RSI queda 70+afastamento sinal: ${symbol} ${signalResult.direction} (${timeframe})`
                   );
                 }
                 break;

@@ -98,6 +98,22 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     isActive: true,
     params: JSON.stringify({ maPeriod: 200 }),
   },
+  {
+    name: 'RSI_OVERBOUGHT_DROP_1H',
+    displayName: 'RSI queda de 70 (mín. 4 pts) + afastamento >12% (1h)',
+    description:
+      'Universo: último scan gravado do Scanner 1 (fecho acima SMA200 em 1h); o motor ignora universo associado na estratégia. Timeframe 1h, VENDA: RSI no candle anterior ≥70, no atual <70 com queda de pelo menos 4 pontos (ex.: 72→68), afastamento % do fecho à EMA80 >12%. Stop loss 6% acima do entrada; take profit na EMA80.',
+    isActive: true,
+    params: JSON.stringify({
+      rsiPeriod: 14,
+      overboughtLevel: 70,
+      minDropPoints: 4,
+      minDistancePct: 12,
+      maPeriod: 80,
+      meanLineType: 'EMA',
+      stopLossPct: 0.06,
+    }),
+  },
 ];
 
 const REMOVED_STRATEGY_NAMES = ['RSI', 'SCANNER_APLUS', 'VOLUME_SPIKE', 'VOLUME_SPIKE_15M'] as const;

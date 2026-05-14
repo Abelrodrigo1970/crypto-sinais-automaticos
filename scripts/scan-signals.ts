@@ -7,7 +7,7 @@
  */
 
 import { fetchTopSymbolsBy1hPriceChange, type Timeframe } from '../lib/marketData';
-import { getBuiltinScanDefinition, UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 } from '../lib/symbolUniverseDefaults';
+import { getBuiltinScanDefinition, UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80, UNIVERSE_CODE_SCANNER_1_ABOVE_MA200 } from '../lib/symbolUniverseDefaults';
 import { scanSymbolUniverseSymbols } from '../lib/universeScanner';
 import type { SignalResult, StrategyParams } from '../lib/signalEngine';
 
@@ -41,6 +41,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
     runAfastamentoMedio30mStrategy,
     runMacdHistogramStrategy,
     runMacdHistogramPmoStrategy,
+    runRsiOverboughtDrop1hStrategy,
     fetchSymbolsWithMarketCap,
   } = se;
 
@@ -98,6 +99,26 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
         requireSmoothCross: false,
       }),
       run: runAfastamentoMedio30mStrategy,
+    },
+    {
+      name: 'RSI_OVERBOUGHT_DROP_1H',
+      displayName: 'RSI queda 70 + afastamento 12%',
+      getSymbols: async () => {
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_SCANNER_1_ABOVE_MA200);
+        if (!def) return [];
+        return scanSymbolUniverseSymbols(def);
+      },
+      timeframes: ['1h'],
+      getParams: () => ({
+        rsiPeriod: 14,
+        overboughtLevel: 70,
+        minDropPoints: 4,
+        minDistancePct: 12,
+        maPeriod: 80,
+        meanLineType: 'EMA',
+        stopLossPct: 0.06,
+      }),
+      run: runRsiOverboughtDrop1hStrategy,
     },
     {
       name: 'MACD_HISTOGRAM_PMO',
