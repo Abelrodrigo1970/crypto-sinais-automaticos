@@ -97,6 +97,8 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
         buySmoothPrevMax: 1,
         buySmoothCurrMin: 2,
         requireSmoothCross: false,
+        stopLossPct: 0.06,
+        takeProfitPct: 0.18,
       }),
       run: runAfastamentoMedio30mStrategy,
     },

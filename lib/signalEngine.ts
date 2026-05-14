@@ -704,6 +704,8 @@ export async function runAfastamentoMedioStrategy(
  * Afastamento médio em 30m: mesma estrutura que 1h (EMA80 + SMA7 do afastamento %).
  * COMPRA: linha suavizada cruza de ≤ buySmoothPrevMax (def. 1) para ≥ buySmoothCurrMin (def. 2), com preço > média de tendência.
  * VENDA: igual ao afastamento 1h (cruze do afastamento cru acima do limiar superior).
+ * Risco/ganho (defeito): SL 6%; TP1 a 18% a favor da entrada — só target1 preenchido para o executor
+ * colocar take-profit parcial de 40% da posição (TP2 omitido).
  */
 export async function runAfastamentoMedio30mStrategy(
   symbol: string,
@@ -721,6 +723,8 @@ export async function runAfastamentoMedio30mStrategy(
   const buyTrendMaPeriod = Math.max(2, Number(params.buyTrendMaPeriod) || 30);
   const buySmoothPrevMax = Number(params.buySmoothPrevMax ?? 1);
   const buySmoothCurrMin = Number(params.buySmoothCurrMin ?? 2);
+  const stopLossPct = Math.min(0.5, Math.max(0.001, Number(params.stopLossPct ?? 0.06)));
+  const takeProfitPct = Math.min(1, Math.max(0.001, Number(params.takeProfitPct ?? 0.18)));
   const meanLineType =
     String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
   const trendMaType =
@@ -806,8 +810,8 @@ export async function runAfastamentoMedio30mStrategy(
       (!requireSmoothCross || (smoothPrev <= upperThreshold && smoothCurr > upperThreshold));
 
     if (crossShort) {
-      const stopLoss = currentPrice * 1.04;
-      const target1 = meanAtClose;
+      const stopLoss = currentPrice * (1 + stopLossPct);
+      const target1 = currentPrice * (1 - takeProfitPct);
       const overshoot = currDist - upperThreshold;
       const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
 
@@ -816,12 +820,13 @@ export async function runAfastamentoMedio30mStrategy(
         entryPrice: currentPrice,
         stopLoss,
         target1,
-        target2: target1,
-        target3: target1,
         strength,
         extraInfo: JSON.stringify({
           ...extraBase,
           setup: 'mean_reversion_short_30m',
+          stopLossPct,
+          takeProfitPct,
+          takeProfitPartialNote: 'TP1 40% posição via executor; target2 omitido',
         }),
       };
     }
@@ -830,10 +835,8 @@ export async function runAfastamentoMedio30mStrategy(
       smoothPrev <= buySmoothPrevMax && smoothCurr >= buySmoothCurrMin;
 
     if (buyCrossSmooth1To2 && currentPrice > trendAtClose) {
-      const stopLoss = currentPrice * 0.96;
-      const target1 = currentPrice * 1.2;
-      const target2 = target1;
-      const target3 = target1;
+      const stopLoss = currentPrice * (1 - stopLossPct);
+      const target1 = currentPrice * (1 + takeProfitPct);
       const rise = smoothCurr - smoothPrev;
       const strength = Math.min(
         100,
@@ -845,12 +848,13 @@ export async function runAfastamentoMedio30mStrategy(
         entryPrice: currentPrice,
         stopLoss,
         target1,
-        target2,
-        target3,
         strength,
         extraInfo: JSON.stringify({
           ...extraBase,
           setup: 'smooth_cross_1_to_2_above_trend_ma_30m',
+          stopLossPct,
+          takeProfitPct,
+          takeProfitPartialNote: 'TP1 40% posição via executor; target2 omitido',
         }),
       };
     }
