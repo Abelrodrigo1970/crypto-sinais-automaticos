@@ -56,7 +56,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO',
     displayName: 'Afastamento médio (80/7)',
     description:
-        'Universo de símbolos: último scan gravado do Scanner 2 (±10% SMA80 em 1h); o motor ignora universo associado na estratégia. EMA80 + SMA(7) do afastamento %; COMPRA: linha 7 de ≤2 para ≥3 com preço > EMA30. Timeframe 1h.',
+        'Universo de símbolos: último scan gravado do Scanner 1 (fecho acima SMA200 em 1h); o motor ignora universo associado na estratégia. EMA80 + SMA(7) do afastamento %; COMPRA: linha 7 de ≤2 para ≥3 com preço > EMA30. Timeframe 1h.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
@@ -75,7 +75,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO_30M',
     displayName: 'Afastamento médio 30m (1→2)',
     description:
-        'Universo: último scan Scanner 2 (±10% SMA80 em 1h) na BD; o motor ignora universo associado. EMA80 + SMA(7) em 30m; COMPRA: linha suavizada ≤1 → ≥2 com preço > EMA30. VENDA: mesmo limiar +60% que 1h. SL 6%; TP a 18% do preço de entrada; take-profit parcial de 40% da posição (TP1 na Binance).',
+        'Universo: último scan Scanner 1 (fecho acima SMA200 em 1h) na BD; o motor ignora universo associado. EMA80 + SMA(7) em 30m. COMPRA: acima EMA80, linha 1→2, preço > EMA30. VENDA: abaixo EMA80 e EMA30, linha 2→2,5. SL 6%; TP 18%; parcial 40% no TP1.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
@@ -87,9 +87,12 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
       buyTrendMaPeriod: 30,
       buySmoothPrevMax: 1,
       buySmoothCurrMin: 2,
-      requireSmoothCross: false,
+      sellSmoothPrevMax: 2,
+      sellSmoothCurrMin: 2.5,
       stopLossPct: 0.06,
       takeProfitPct: 0.18,
+      buyEnabled: true,
+      sellEnabled: true,
     }),
   },
   {
@@ -104,7 +107,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'RSI_OVERBOUGHT_DROP_1H',
     displayName: 'RSI queda de 70 (mín. 4 pts) + afastamento >12% (1h)',
     description:
-      'Universo: último scan gravado do Scanner 1 (fecho acima SMA200 em 1h); o motor ignora universo associado na estratégia. Timeframe 1h, VENDA: RSI no candle anterior ≥70, no atual <70 com queda de pelo menos 4 pontos (ex.: 72→68), afastamento % do fecho à EMA80 >12%. Stop loss 6% acima do entrada; take profit na EMA80.',
+      'Universo: último scan gravado do Scanner 2 (±10% SMA80 em 1h); o motor ignora universo associado na estratégia. Timeframe 1h, VENDA: RSI no candle anterior ≥70, no atual <70 com queda de pelo menos 4 pontos (ex.: 72→68), afastamento % do fecho à EMA80 >12%. Stop loss 6% acima do entrada; take profit na EMA80.',
     isActive: true,
     params: JSON.stringify({
       rsiPeriod: 14,

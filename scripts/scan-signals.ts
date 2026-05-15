@@ -58,7 +58,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
       name: 'AFASTAMENTO_MEDIO',
       displayName: 'Afastamento médio',
       getSymbols: async () => {
-        const def = getBuiltinScanDefinition(UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80);
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_SCANNER_1_ABOVE_MA200);
         if (!def) return [];
         return scanSymbolUniverseSymbols(def);
       },
@@ -81,7 +81,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
       name: 'AFASTAMENTO_MEDIO_30M',
       displayName: 'Afastamento médio 30m (1→2)',
       getSymbols: async () => {
-        const def = getBuiltinScanDefinition(UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80);
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_SCANNER_1_ABOVE_MA200);
         if (!def) return [];
         return scanSymbolUniverseSymbols(def);
       },
@@ -96,9 +96,12 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
         buyTrendMaPeriod: 30,
         buySmoothPrevMax: 1,
         buySmoothCurrMin: 2,
-        requireSmoothCross: false,
+        sellSmoothPrevMax: 2,
+        sellSmoothCurrMin: 2.5,
         stopLossPct: 0.06,
         takeProfitPct: 0.18,
+        buyEnabled: true,
+        sellEnabled: true,
       }),
       run: runAfastamentoMedio30mStrategy,
     },
@@ -106,7 +109,7 @@ function buildStrategies(se: typeof import('../lib/signalEngine')): StrategyDef[
       name: 'RSI_OVERBOUGHT_DROP_1H',
       displayName: 'RSI queda 70 + afastamento 12%',
       getSymbols: async () => {
-        const def = getBuiltinScanDefinition(UNIVERSE_CODE_SCANNER_1_ABOVE_MA200);
+        const def = getBuiltinScanDefinition(UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80);
         if (!def) return [];
         return scanSymbolUniverseSymbols(def);
       },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { executeSignalReal, getExecutorStatus } from '@/lib/tradingExecutor';
 import { getTradingControl } from '@/lib/tradingControl';
+import { isDirectionEnabledForStrategy } from '@/lib/strategySideControls';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,10 +21,21 @@ export async function GET(request: NextRequest) {
         const row = await prisma.signal.findUnique({
           where: { id: signalId },
           select: {
-            strategy: { select: { binanceExecutionOn: true } },
+            direction: true,
+            strategy: { select: { name: true, binanceExecutionOn: true, params: true } },
           },
         });
         strategyBinanceOn = row?.strategy?.binanceExecutionOn !== false;
+        if (
+          row?.strategy &&
+          !isDirectionEnabledForStrategy(
+            row.strategy.name,
+            row.strategy.params,
+            row.direction as 'BUY' | 'SELL'
+          )
+        ) {
+          strategyBinanceOn = false;
+        }
       } catch {
         strategyBinanceOn = true;
       }
@@ -34,6 +46,30 @@ export async function GET(request: NextRequest) {
     if (!canExecute) {
       if (!binanceExecutionOn) {
         reason = 'Binance em pausa (página Estratégias — interruptor global OFF).';
+      } else if (!strategyBinanceOn && signalId) {
+        const row = await prisma.signal.findUnique({
+          where: { id: signalId },
+          select: {
+            direction: true,
+            strategy: { select: { name: true, params: true } },
+          },
+        });
+        if (
+          row?.strategy &&
+          !isDirectionEnabledForStrategy(
+            row.strategy.name,
+            row.strategy.params,
+            row.direction as 'BUY' | 'SELL'
+          )
+        ) {
+          reason =
+            row.direction === 'BUY'
+              ? 'Compra desativada para Afastamento médio 30m (Estratégias — interruptor Compra OFF).'
+              : 'Venda desativada para Afastamento médio 30m (Estratégias — interruptor Venda OFF).';
+        } else {
+          reason =
+            'Execução Binance desativada para esta estratégia (Estratégias — interruptor da estratégia OFF).';
+        }
       } else if (!strategyBinanceOn) {
         reason =
           'Execução Binance desativada para esta estratégia (Estratégias — interruptor da estratégia OFF).';
@@ -93,12 +129,32 @@ export async function POST(request: NextRequest) {
         strength: true,
         strategyName: true,
         status: true,
-        strategy: { select: { binanceExecutionOn: true } },
+        strategy: { select: { name: true, binanceExecutionOn: true, params: true } },
       },
     });
 
     if (!signal) {
       return NextResponse.json({ error: 'Sinal não encontrado' }, { status: 404 });
+    }
+
+    if (
+      signal.strategy &&
+      !isDirectionEnabledForStrategy(
+        signal.strategy.name,
+        signal.strategy.params,
+        signal.direction as 'BUY' | 'SELL'
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            signal.direction === 'BUY'
+              ? 'Compra desativada para Afastamento médio 30m. Liga «Compra» em Estratégias.'
+              : 'Venda desativada para Afastamento médio 30m. Liga «Venda» em Estratégias.',
+        },
+        { status: 400 }
+      );
     }
 
     if (signal.status === 'IN_PROGRESS') {

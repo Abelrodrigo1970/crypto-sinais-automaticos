@@ -188,6 +188,15 @@ export default function EstrategiasPage() {
     }
   };
 
+  const handleAfastamento30mSideToggle = async (
+    strategy: Strategy,
+    key: 'buyEnabled' | 'sellEnabled',
+    next: boolean
+  ) => {
+    const params = JSON.parse(strategy.params || '{}');
+    await handleUpdateParams(strategy, { ...params, [key]: next });
+  };
+
   const handleUpdateParams = async (strategy: Strategy, newParams: any) => {
     try {
       setSaving(strategy.id);
@@ -321,6 +330,57 @@ export default function EstrategiasPage() {
             </div>
           </div>
         );
+
+      case 'AFASTAMENTO_MEDIO_30M': {
+        const buyOn = params.buyEnabled !== false && params.buyEnabled !== 'false';
+        const sellOn = params.sellEnabled !== false && params.sellEnabled !== 'false';
+        const sideBtn = (on: boolean) =>
+          on
+            ? 'bg-green-600 hover:bg-green-700 text-white'
+            : 'bg-gray-300 hover:bg-gray-400 text-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-100';
+
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Liga ou desliga cada lado: em OFF não são gerados sinais nem execução manual desse lado.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Compra</span>
+                <span
+                  className={`text-xs font-semibold ${buyOn ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}
+                >
+                  {buyOn ? 'ON' : 'OFF'}
+                </span>
+                <button
+                  type="button"
+                  disabled={saving === strategy.id}
+                  onClick={() => handleAfastamento30mSideToggle(strategy, 'buyEnabled', !buyOn)}
+                  className={`min-w-[5.5rem] px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${sideBtn(buyOn)}`}
+                >
+                  {buyOn ? 'Desligar' : 'Ligar'}
+                </button>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Venda</span>
+                <span
+                  className={`text-xs font-semibold ${sellOn ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-300'}`}
+                >
+                  {sellOn ? 'ON' : 'OFF'}
+                </span>
+                <button
+                  type="button"
+                  disabled={saving === strategy.id}
+                  onClick={() => handleAfastamento30mSideToggle(strategy, 'sellEnabled', !sellOn)}
+                  className={`min-w-[5.5rem] px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 ${sideBtn(sellOn)}`}
+                >
+                  {sellOn ? 'Desligar' : 'Ligar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
 
       default:
         return <p className="text-sm text-gray-500 dark:text-gray-400">Sem parâmetros configuráveis</p>;

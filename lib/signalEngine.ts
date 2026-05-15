@@ -14,6 +14,7 @@ import {
   UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80,
   UNIVERSE_CODE_SCANNER_1_ABOVE_MA200,
 } from './symbolUniverseDefaults';
+import { isBuySideEnabled, isSellSideEnabled } from './strategySideControls';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
 import { createEntrySignals } from './multiTimeframeStrategy';
 import {
@@ -425,7 +426,7 @@ export async function runMa60CrossoverStrategy(
  * com queda de pelo menos `minDropPoints` pontos (ex.: 72→68, 71→67),
  * e afastamento % do fecho à média longa (def. EMA 80) > `minDistancePct` (ex.: 12%).
  * SL 6% acima; TP1/2/3 na média longa (mean reversion no mesmo TF).
- * O universo de símbolos é escolhido em `runAllStrategies`: último scan gravado Scanner 1 (acima MA200, 1h).
+ * O universo de símbolos é escolhido em `runAllStrategies`: último scan gravado Scanner 2 (±10% SMA80, 1h).
  */
 export async function runRsiOverboughtDrop1hStrategy(
   symbol: string,
@@ -701,11 +702,10 @@ export async function runAfastamentoMedioStrategy(
 }
 
 /**
- * Afastamento médio em 30m: mesma estrutura que 1h (EMA80 + SMA7 do afastamento %).
- * COMPRA: linha suavizada cruza de ≤ buySmoothPrevMax (def. 1) para ≥ buySmoothCurrMin (def. 2), com preço > média de tendência.
- * VENDA: igual ao afastamento 1h (cruze do afastamento cru acima do limiar superior).
- * Risco/ganho (defeito): SL 6%; TP1 a 18% a favor da entrada — só target1 preenchido para o executor
- * colocar take-profit parcial de 40% da posição (TP2 omitido).
+ * Afastamento médio em 30m: EMA80 + SMA(7) do afastamento %.
+ * COMPRA (acima EMA80): linha suavizada 1→2, preço > EMA30.
+ * VENDA (abaixo EMA80 e EMA30): linha suavizada 2→2,5, preço < EMA30.
+ * SL 6%; TP 18%; só target1 (parcial 40% na Binance).
  */
 export async function runAfastamentoMedio30mStrategy(
   symbol: string,
@@ -723,15 +723,16 @@ export async function runAfastamentoMedio30mStrategy(
   const buyTrendMaPeriod = Math.max(2, Number(params.buyTrendMaPeriod) || 30);
   const buySmoothPrevMax = Number(params.buySmoothPrevMax ?? 1);
   const buySmoothCurrMin = Number(params.buySmoothCurrMin ?? 2);
+  const sellSmoothPrevMax = Number(params.sellSmoothPrevMax ?? 2);
+  const sellSmoothCurrMin = Number(params.sellSmoothCurrMin ?? 2.5);
+  const buyEnabled = isBuySideEnabled(params);
+  const sellEnabled = isSellSideEnabled(params);
   const stopLossPct = Math.min(0.5, Math.max(0.001, Number(params.stopLossPct ?? 0.06)));
   const takeProfitPct = Math.min(1, Math.max(0.001, Number(params.takeProfitPct ?? 0.18)));
   const meanLineType =
     String(params.meanLineType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
   const trendMaType =
     String(params.trendMaType || 'EMA').toUpperCase() === 'SMA' ? 'SMA' : 'EMA';
-  const requireSmoothCross =
-    params.requireSmoothCross === true ||
-    params.requireSmoothCross === 'true';
 
   const candlesNeeded = Math.max(maPeriod, buyTrendMaPeriod) + smoothPeriod + 40;
   try {
@@ -802,18 +803,26 @@ export async function runAfastamentoMedio30mStrategy(
       lowerThreshold,
       buySmoothPrevMax,
       buySmoothCurrMin,
+      sellSmoothPrevMax,
+      sellSmoothCurrMin,
     };
 
-    const crossShort =
-      prevDist <= upperThreshold &&
-      currDist > upperThreshold &&
-      (!requireSmoothCross || (smoothPrev <= upperThreshold && smoothCurr > upperThreshold));
+    const sellCrossSmooth2To25 =
+      smoothPrev <= sellSmoothPrevMax && smoothCurr >= sellSmoothCurrMin;
 
-    if (crossShort) {
+    if (
+      sellEnabled &&
+      sellCrossSmooth2To25 &&
+      currentPrice < meanAtClose &&
+      currentPrice < trendAtClose
+    ) {
       const stopLoss = currentPrice * (1 + stopLossPct);
       const target1 = currentPrice * (1 - takeProfitPct);
-      const overshoot = currDist - upperThreshold;
-      const strength = Math.min(100, Math.max(60, Math.round(65 + Math.min(overshoot, 40))));
+      const rise = smoothCurr - smoothPrev;
+      const strength = Math.min(
+        100,
+        Math.max(60, Math.round(65 + Math.min(Math.max(rise, 0) * 10, 25)))
+      );
 
       return {
         direction: 'SELL',
@@ -823,7 +832,7 @@ export async function runAfastamentoMedio30mStrategy(
         strength,
         extraInfo: JSON.stringify({
           ...extraBase,
-          setup: 'mean_reversion_short_30m',
+          setup: 'smooth_cross_2_to_2_5_below_ma80_ma30',
           stopLossPct,
           takeProfitPct,
           takeProfitPartialNote: 'TP1 40% posição via executor; target2 omitido',
@@ -834,7 +843,12 @@ export async function runAfastamentoMedio30mStrategy(
     const buyCrossSmooth1To2 =
       smoothPrev <= buySmoothPrevMax && smoothCurr >= buySmoothCurrMin;
 
-    if (buyCrossSmooth1To2 && currentPrice > trendAtClose) {
+    if (
+      buyEnabled &&
+      buyCrossSmooth1To2 &&
+      currentPrice > meanAtClose &&
+      currentPrice > trendAtClose
+    ) {
       const stopLoss = currentPrice * (1 - stopLossPct);
       const target1 = currentPrice * (1 + takeProfitPct);
       const rise = smoothCurr - smoothPrev;
@@ -1094,7 +1108,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
             : timeframes;
 
       // Universo configurado na BD (Scanner 1 / 2 / 3) substitui listagens por defeito.
-      // Afastamento 1h/30m e RSI queda 70 ignoram symbolUniverse: usam último scan gravado (Scanner 2 ou 1).
+      // Afastamento 1h/30m e RSI queda 70 ignoram symbolUniverse: usam último scan gravado (Scanner 1 ou 2).
       let symbolsToAnalyze = symbols;
       if (
         strategy.symbolUniverse &&
@@ -1119,9 +1133,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           symbolsToAnalyze = [];
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO') {
-        const code = UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80;
+        const code = UNIVERSE_CODE_SCANNER_1_ABOVE_MA200;
         console.log(
-          '🔍 AFASTAMENTO_MEDIO: universo = último scan Scanner 2 (±10% SMA80, 1h) gravado na BD...'
+          '🔍 AFASTAMENTO_MEDIO: universo = último scan Scanner 1 (acima MA200, 1h) gravado na BD...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
@@ -1134,9 +1148,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           );
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO_30M') {
-        const code = UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80;
+        const code = UNIVERSE_CODE_SCANNER_1_ABOVE_MA200;
         console.log(
-          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 2 (±10% SMA80, 1h) gravado na BD; sinais em 30m...'
+          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 1 (acima MA200, 1h) gravado na BD; sinais em 30m...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
@@ -1149,9 +1163,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           );
         }
       } else if (strategy.name === 'RSI_OVERBOUGHT_DROP_1H') {
-        const code = UNIVERSE_CODE_SCANNER_1_ABOVE_MA200;
+        const code = UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80;
         console.log(
-          '🔍 RSI_OVERBOUGHT_DROP_1H: universo = último scan Scanner 1 (acima MA200, 1h) gravado na BD...'
+          '🔍 RSI_OVERBOUGHT_DROP_1H: universo = último scan Scanner 2 (±10% SMA80, 1h) gravado na BD...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {
