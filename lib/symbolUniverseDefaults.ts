@@ -7,7 +7,7 @@ import type { UniverseScanDefinition } from './universeScanner';
 
 /**
  * Scanner 1 na página Universos: fecho acima da SMA200 (1h).
- * Estratégias **Afastamento médio** (1h e 30m) usam o último scan gravado com este código.
+ * Estratégia **Afastamento médio (1h)** usa o último scan gravado com este código.
  */
 export const UNIVERSE_CODE_SCANNER_1_ABOVE_MA200 =
   'UNIVERSE_ABOVE_MA200_1H' as const;
@@ -20,7 +20,7 @@ export const UNIVERSE_CODE_SCANNER_1_ABOVE_MA200 =
 export const UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80 =
   'UNIVERSE_NEAR_MA200_PCT10_1H' as const;
 
-/** Scanner 3 na página Universos: |preço − SMA80| / SMA80 × 100 ≤ 4% (velas 1h). */
+/** Scanner 3: |preço − SMA80| / SMA80 × 100 ≤ 4% (1h). Afastamento médio **30m** usa o último scan gravado. */
 export const UNIVERSE_CODE_SCANNER_3_MA80_PCT4 =
   'UNIVERSE_NEAR_MA200_PCT4_1H' as const;
 

@@ -13,6 +13,7 @@ import { getLatestUniverseScanSymbols } from './universeScanPersistence';
 import {
   UNIVERSE_CODE_AFASTAMENTO_SCANNER_MA80,
   UNIVERSE_CODE_SCANNER_1_ABOVE_MA200,
+  UNIVERSE_CODE_SCANNER_3_MA80_PCT4,
 } from './symbolUniverseDefaults';
 import { isBuySideEnabled, isSellSideEnabled } from './strategySideControls';
 import { fetchCandles, fetchTopSymbolsBy1hPriceChange, type Timeframe } from './marketData';
@@ -1108,7 +1109,7 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
             : timeframes;
 
       // Universo configurado na BD (Scanner 1 / 2 / 3) substitui listagens por defeito.
-      // Afastamento 1h/30m e RSI queda 70 ignoram symbolUniverse: usam último scan gravado (Scanner 1 ou 2).
+      // Afastamento 1h → Scanner 1; 30m → Scanner 3; RSI → Scanner 2 — ignoram symbolUniverse na BD.
       let symbolsToAnalyze = symbols;
       if (
         strategy.symbolUniverse &&
@@ -1148,9 +1149,9 @@ export async function runAllStrategies(options?: RunAllStrategiesOptions): Promi
           );
         }
       } else if (strategy.name === 'AFASTAMENTO_MEDIO_30M') {
-        const code = UNIVERSE_CODE_SCANNER_1_ABOVE_MA200;
+        const code = UNIVERSE_CODE_SCANNER_3_MA80_PCT4;
         console.log(
-          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 1 (acima MA200, 1h) gravado na BD; sinais em 30m...'
+          '🔍 AFASTAMENTO_MEDIO_30M: universo = último scan Scanner 3 (±4% SMA80, 1h) gravado na BD; sinais em 30m...'
         );
         const latest = await getLatestUniverseScanSymbols(code);
         if (!latest.ok) {

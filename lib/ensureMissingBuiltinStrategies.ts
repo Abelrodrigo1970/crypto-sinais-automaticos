@@ -75,7 +75,7 @@ const BUILTIN_STRATEGY_SEEDS: Array<{
     name: 'AFASTAMENTO_MEDIO_30M',
     displayName: 'Afastamento médio 30m (1→2)',
     description:
-        'Universo: último scan Scanner 1 (fecho acima SMA200 em 1h) na BD; o motor ignora universo associado. EMA80 + SMA(7) em 30m. COMPRA: acima EMA80, linha 1→2, preço > EMA30. VENDA: abaixo EMA80 e EMA30, linha 2→2,5. SL 6%; TP 18%; parcial 40% no TP1.',
+        'Universo: último scan Scanner 3 (±4% SMA80 em 1h) na BD; o motor ignora universo associado. EMA80 + SMA(7) em 30m. COMPRA: acima EMA80, linha 1→2, preço > EMA30. VENDA: abaixo EMA80 e EMA30, linha 2→2,5. SL 6%; TP 18%; parcial 40% no TP1. Toggles Compra/Venda em params.',
     isActive: true,
     params: JSON.stringify({
       maPeriod: 80,
