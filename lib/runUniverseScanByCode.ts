@@ -33,7 +33,7 @@ export type RunUniverseScanByCodeResult =
 
 /**
  * Resolve regras (BD ou embutido), corre `scanSymbolUniverse` e grava histórico.
- * Usado pela API `/api/symbol-universes/scan` e pelo cron Scanner 3.
+ * Usado pela API `/api/symbol-universes/scan` e pelos crons Scanner 1/2/3.
  */
 export async function runUniverseScanByCode(code: string): Promise<RunUniverseScanByCodeResult> {
   let scanDef = getBuiltinScanDefinition(code);

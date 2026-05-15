@@ -2,22 +2,38 @@
 
 O sistema está configurado para executar automaticamente a cada hora entre 8:00 e 23:59.
 
-## Scanner 3 (MA80 ±4%) — cron opcional
+## Universos / scanners — crons opcionais (background)
 
-| Endpoint | Função | Tempo estimado |
-|----------|--------|----------------|
-| `/api/cron/scan-scanner-3-ma80` | Atualiza o universo **Scanner 3** (|afastamento| à **SMA80** ≤ **4%**, velas 1h) e grava na BD | vários minutos (corre em **background**; a resposta HTTP é imediata) |
+Todos respondem já e correm o scan **em background** (evita timeout do Railway).
+
+**Recomendado — um único cron:** `/api/cron/scan-scanners-all` agenda **Scanner 1 → 2 → 3** em **sequência** (menos sobrecarga na Binance do que disparar os 3 URLs ao mesmo tempo).
+
+| Endpoint | Universo | Função |
+|----------|-----------|--------|
+| `/api/cron/scan-scanner-1-ma200` | `UNIVERSE_ABOVE_MA200_1H` | Scanner 1 — fecho **acima SMA200**, 1h |
+| `/api/cron/scan-scanner-2-ma80` | `UNIVERSE_NEAR_MA200_PCT10_1H` | Scanner 2 — **±10%** SMA80, 1h |
+| `/api/cron/scan-scanner-3-ma80` | `UNIVERSE_NEAR_MA200_PCT4_1H` | Scanner 3 — **±4%** SMA80, 1h |
+| `/api/cron/scan-scanners-all` | os 3 códigos acima | **Todos** os scans, um após outro |
 
 **cron-job.org (exemplo):**
 
-- **Title:** Scanner 3 MA80 ±4%
-- **URL:** `https://SEU_DOMINIO/api/cron/scan-scanner-3-ma80`
 - **Method:** GET
-- **Headers:** `Authorization: Bearer SEU_CRON_SECRET` (igual ao de `run-signals`, se usares `CRON_SECRET` no Railway)
+- **Headers:** `Authorization: Bearer SEU_CRON_SECRET` (opcional; igual ao `run-signals`, se `CRON_SECRET` no Railway)
 
-**Alternativa sem cron dedicado:** pedido manual (bloqueia até terminar):
+URLs de exemplo (troca pelo teu domínio):
 
-`GET /api/symbol-universes/scan?code=UNIVERSE_NEAR_MA200_PCT4_1H`
+- **Todos:** `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/scan-scanners-all`
+- `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/scan-scanner-1-ma200`
+- `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/scan-scanner-2-ma80`
+- `https://crypto-sinais-automaticos-production.up.railway.app/api/cron/scan-scanner-3-ma80`
+
+**Alternativa manual (bloqueia até terminar):**
+
+```http
+GET /api/symbol-universes/scan?code=UNIVERSE_ABOVE_MA200_1H
+GET /api/symbol-universes/scan?code=UNIVERSE_NEAR_MA200_PCT10_1H
+GET /api/symbol-universes/scan?code=UNIVERSE_NEAR_MA200_PCT4_1H
+```
 
 ---
 
