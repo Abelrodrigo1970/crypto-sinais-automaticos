@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 
@@ -122,18 +122,18 @@ export default function EstatisticasPage() {
   const [stopLoss, setStopLoss] = useState<string>('4');
   const [takeProfit, setTakeProfit] = useState<string>('20');
   const [simulatedStats, setSimulatedStats] = useState<Statistics | null>(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  useEffect(() => {
-    fetchSignals();
-  }, []);
-
-  const fetchSignals = async () => {
+  const fetchSignals = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('limit', '2000');
       params.append('minStrength', '60');
       params.append('onlyClosed', 'true');
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
 
       const response = await fetch(`/api/signals?${params.toString()}`);
       const data = await response.json();
@@ -154,12 +154,27 @@ export default function EstatisticasPage() {
         setSignals(signalsWithResults);
         const calculatedStats = calculateStatistics(signalsWithResults);
         setStats(calculatedStats);
+        setSimulatedStats(null);
       }
     } catch (error) {
       console.error('Erro ao buscar resultados:', error);
     } finally {
       setLoading(false);
     }
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchSignals();
+  }, [fetchSignals]);
+
+  const clearDateFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const formatDateLabel = (isoDate: string) => {
+    const [y, m, d] = isoDate.split('-');
+    return `${d}/${m}/${y}`;
   };
 
   // Função para simular trade com stop loss e take profit
@@ -216,12 +231,12 @@ export default function EstatisticasPage() {
   };
 
   // Função para calcular estatísticas simuladas
-  const calculateSimulatedStatistics = () => {
+  const calculateSimulatedStatistics = (sourceSignals: SignalWithResult[] = signals) => {
     const stopLossNum = parseFloat(stopLoss) || 4;
     const takeProfitNum = parseFloat(takeProfit) || 20;
 
     // Simular cada trade
-    const simulatedSignals: SignalWithResult[] = signals.map((s) => ({
+    const simulatedSignals: SignalWithResult[] = sourceSignals.map((s) => ({
       ...s,
       netResult: simulateTrade(s, stopLossNum, takeProfitNum),
     }));
@@ -494,9 +509,68 @@ export default function EstatisticasPage() {
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
           Estatísticas dos Resultados
         </h1>
+
+        {/* Filtro por datas */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-8 border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Período</h2>
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={clearDateFilters}
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white self-start sm:self-auto"
+              >
+                Limpar datas
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Data inicial
+              </label>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Data final
+              </label>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 pb-2">
+              {dateFrom || dateTo ? (
+                <>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {signals.length}
+                  </span>{' '}
+                  trade{signals.length !== 1 ? 's' : ''} fechado{signals.length !== 1 ? 's' : ''}
+                  {dateFrom && dateTo
+                    ? ` entre ${formatDateLabel(dateFrom)} e ${formatDateLabel(dateTo)}`
+                    : dateFrom
+                      ? ` desde ${formatDateLabel(dateFrom)}`
+                      : ` até ${formatDateLabel(dateTo)}`}
+                </>
+              ) : (
+                <>Todos os trades fechados (força ≥ 60)</>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Painel de Simulação */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-8 border border-gray-200 dark:border-gray-700">
@@ -556,7 +630,7 @@ export default function EstatisticasPage() {
             </div>
             <div>
               <button
-                onClick={calculateSimulatedStatistics}
+                onClick={() => calculateSimulatedStatistics()}
                 disabled={!useSimulation}
                 className={`w-full px-4 py-2 rounded-md font-medium transition-colors ${
                   useSimulation
