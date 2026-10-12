@@ -12,6 +12,11 @@ export default function ScannersHubPage() {
       desc: 'As 50 criptos perpetual USDT com maior ganho % na última hora (velas 1h).',
     },
     {
+      href: '/scanners/range-6m',
+      title: 'Top 30 — maior amplitude 6 meses',
+      desc: 'Maior diferença entre máxima e mínima dos últimos 6 meses (1d). Preço actual, diferença à máxima, à mínima e média.',
+    },
+    {
       href: '/scanner',
       title: 'Scanner Trades A+',
       desc: 'Setups TREND_PULLBACK e BREAKOUT_RETEST (15m / score).',
