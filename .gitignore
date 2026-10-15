@@ -82,3 +82,5 @@ prisma/seed.ts
 # Railway config (opcional - descomente se não quiser commitado)
 # railway.json
 
+backups/
+.railway/

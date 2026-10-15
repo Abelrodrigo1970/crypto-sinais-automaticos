@@ -10,78 +10,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Conjunto de símbolos (ex.: acima da MA200 vs até ±10% da MA200) para estratégias filtrarem o universo.
-model SymbolUniverse {
-  id               String   @id @default(cuid())
-  code             String   @unique
-  displayName      String
-  description      String
-  /// ABOVE_MA | WITHIN_PCT_OF_MA
-  ruleType         String
-  maPeriod         Int      @default(200)
-  /// Para WITHIN_PCT_OF_MA: distância abs(close-MA)/MA * 100 <= este valor
-  maxDistancePct   Float?
-  timeframe        String   @default("1h")
-  minQuoteVolume   Float    @default(100000)
-  candidateLimit   Int      @default(400)
-
-  strategies Strategy[]
-}
-
-/// Histórico de execuções do scanner MA200 (página /scanners/universos).
-model UniverseScanRun {
-  id           String   @id @default(cuid())
-  universeCode String
-  scannedAt    DateTime @default(now())
-  rowCount     Int
-  source       String
-
-  rows UniverseScanRow[]
-
-  @@index([universeCode, scannedAt])
-}
-
-model UniverseScanRow {
-  id        String @id @default(cuid())
-  runId     String
-  run       UniverseScanRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  symbol    String
-  close     Float
-  ma        Float
-  pctFromMa Float
-
-  @@index([runId])
-  @@index([symbol])
-}
-
-/// Linha única (id=1): interruptor global «Binance ON/OFF» na UI Estratégias.
-model TradingControl {
-  id                  Int      @id @default(1)
-  binanceExecutionOn  Boolean  @default(true)
-  updatedAt           DateTime @updatedAt
-}
-
 model Strategy {
   id          String   @id @default(cuid())
-  name        String   @unique // ex: "RSI", "MA_CROSSOVER"
+  name        String   @unique // código da estratégia no registo (lib/strategies)
   displayName String   // ex: "RSI Sobrecomprado/Sobrevendido"
   description String
   isActive    Boolean  @default(true)
-  /// Permite enviar ordens Binance para sinais desta estratégia (independente de isActive = gerar sinais).
-  binanceExecutionOn Boolean @default(true)
   params      String   @default("{}") // JSON string com parâmetros
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  symbolUniverseId String?
-  symbolUniverse   SymbolUniverse? @relation(fields: [symbolUniverseId], references: [id], onDelete: SetNull)
 
   signals Signal[]
 }
 
 model Signal {
   id           String   @id @default(cuid())
-  symbol       String   // ex: "BTCUSDT"
+  symbol       String   // perpétuo Bybit, ex: "AAPLUSDT"
   direction    String   // "BUY" | "SELL"
   timeframe    String   // ex: "1m", "5m", "1h"
   strategyId   String
@@ -110,7 +54,3 @@ model Signal {
   @@index([generatedAt])
   @@index([status])
 }
-
-
-
-

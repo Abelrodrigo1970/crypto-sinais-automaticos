@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Crypto Sinais Automáticos',
-  description: 'Sistema de sinais automáticos de criptomoedas',
+  title: 'Ações Bybit · Sinais',
+  description: 'Estratégias e sinais para ações e ETFs cotados na Bybit',
 };
 
 export default function RootLayout({

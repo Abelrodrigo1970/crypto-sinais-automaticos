@@ -46,7 +46,7 @@ export async function updateMissingHighLow24h(): Promise<{
           const endTimestamp = signalTimestamp + (24 * 60 * 60 * 1000); // 24 horas depois
           
           // Buscar candles recentes (últimas 48 horas para garantir cobertura)
-          const allCandles = await fetchCandles(signal.symbol, '1h', 48);
+          const allCandles = await fetchCandles(signal.symbol, '1h', 48, { includeOpenCandle: true });
           
           // Filtrar candles que estão dentro do período de 24h após o sinal
           const relevantCandles = allCandles.filter((candle) => {
@@ -147,8 +147,8 @@ export async function update24hResults(): Promise<{
           const endTimestamp = signalTimestamp + (24 * 60 * 60 * 1000); // 24 horas depois
           
           // Buscar candles recentes (últimas 48 horas para garantir cobertura)
-          // A API da Binance retorna os candles mais recentes, então vamos buscar e filtrar
-          const allCandles = await fetchCandles(signal.symbol, '1h', 48);
+          // Buscar as últimas 48 velas de 1h e filtrar a janela de 24h
+          const allCandles = await fetchCandles(signal.symbol, '1h', 48, { includeOpenCandle: true });
           
           // Filtrar candles que estão dentro do período de 24h após o sinal
           // Cada candle representa 1 hora, então o timestamp do candle é o início da hora

@@ -1,6 +1,9 @@
 /**
- * Funções para buscar dados de mercado de APIs públicas
+ * Dados de mercado da Bybit (API pública v5, perpétuos lineares USDT).
+ * Universo: ações (symbolType=stock) e ETFs (symbolType=ETF) cotados como perpétuos.
  */
+
+const BYBIT_BASE_URL = process.env.BYBIT_BASE_URL || 'https://api.bybit.com';
 
 export interface Candle {
   open: number;
@@ -8,430 +11,194 @@ export interface Candle {
   low: number;
   close: number;
   volume: number;
+  /** Abertura da vela (ms) */
   timestamp: number;
 }
 
-/**
- * Na Binance USDⓈ-M vários memecoins usam contrato com multiplicador "1000…"
- * (ex.: ticker PEPEUSDT devolve 400; o contrato válido é 1000PEPEUSDT).
- */
-const BINANCE_USDM_SYMBOL_ALIASES: Record<string, string> = {
-  PEPEUSDT: '1000PEPEUSDT',
-  SHIBUSDT: '1000SHIBUSDT',
-  FLOKIUSDT: '1000FLOKIUSDT',
-  BONKUSDT: '1000BONKUSDT',
-  SATSUSDT: '1000SATSUSDT',
-  RATSUSDT: '1000RATSUSDT',
-  LUNCUSDT: '1000LUNCUSDT',
-  XECUSDT: '1000XECUSDT',
-  CHEEMSUSDT: '1000CHEEMSUSDT',
+export const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] as const;
+export type Timeframe = typeof TIMEFRAMES[number];
+
+const BYBIT_INTERVALS: Record<Timeframe, string> = {
+  '1m': '1',
+  '5m': '5',
+  '15m': '15',
+  '30m': '30',
+  '1h': '60',
+  '4h': '240',
+  '1d': 'D',
+  '1w': 'W',
 };
 
-/** Símbolo aceite pela API fapi (klines / ticker price). */
-export function toBinanceUsdMFuturesSymbol(symbol: string): string {
-  const upper = symbol.trim().toUpperCase();
-  return BINANCE_USDM_SYMBOL_ALIASES[upper] ?? upper;
+const TIMEFRAME_MS: Record<Timeframe, number> = {
+  '1m': 60_000,
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '30m': 30 * 60_000,
+  '1h': 60 * 60_000,
+  '4h': 4 * 60 * 60_000,
+  '1d': 24 * 60 * 60_000,
+  '1w': 7 * 24 * 60 * 60_000,
+};
+
+export function timeframeToMs(timeframe: Timeframe): number {
+  return TIMEFRAME_MS[timeframe];
 }
 
-/** Ordem de tentativa: alias primeiro se existir, depois o símbolo original (BD legada). */
-function futuresPriceSymbolCandidates(symbol: string): string[] {
-  const upper = symbol.trim().toUpperCase();
-  const mapped = BINANCE_USDM_SYMBOL_ALIASES[upper];
-  if (mapped && mapped !== upper) {
-    return [mapped, upper];
-  }
-  return [upper];
-}
-
-/**
- * Busca velas (candles) de uma exchange pública (Binance Futures USDⓈ-M)
- */
-export async function fetchCandles(
-  symbol: string,
-  interval: string,
-  limit: number = 200,
-  startTime?: number,
-  endTime?: number
-): Promise<Candle[]> {
-  const apiSymbol = toBinanceUsdMFuturesSymbol(symbol);
-  try {
-    let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${apiSymbol}&interval=${interval}&limit=${limit}`;
-    
-    if (startTime) {
-      url += `&startTime=${startTime}`;
-    }
-    if (endTime) {
-      url += `&endTime=${endTime}`;
-    }
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      const error: any = new Error(`Erro ao buscar dados: ${response.statusText}`);
-      error.status = response.status;
-      throw error;
-    }
-
-    const data = await response.json();
-
-    return data.map((candle: any[]) => ({
-      open: parseFloat(candle[1]),
-      high: parseFloat(candle[2]),
-      low: parseFloat(candle[3]),
-      close: parseFloat(candle[4]),
-      volume: parseFloat(candle[5]),
-      timestamp: candle[0],
-    }));
-  } catch (error) {
-    console.error(`Erro ao buscar candles para ${symbol}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Busca o preço atual de um par (Futures USDⓈ-M)
- * Usa aliases 1000* quando necessário; retry para falhas transitórias.
- */
-export async function fetchCurrentPrice(symbol: string, retries = 2): Promise<number> {
-  const candidates = futuresPriceSymbolCandidates(symbol);
+async function bybitGet<T>(path: string, query: Record<string, string | number | undefined>, retries = 2): Promise<T> {
+  const qs = Object.entries(query)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+    .join('&');
+  const url = `${BYBIT_BASE_URL}${path}?${qs}`;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    for (const sym of candidates) {
-      try {
-        const response = await fetch(
-          `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${sym}`
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-          return parseFloat(data.price);
-        }
-
-        // 400 = símbolo inválido neste endpoint; tentar próximo alias (ex.: PEPE → 1000PEPE)
-        if (response.status === 400) {
-          lastError = new Error(`Erro ao buscar preço: Bad Request (${sym})`);
-          continue;
-        }
-
-        throw new Error(`Erro ao buscar preço: ${response.statusText}`);
-      } catch (error) {
-        if (error instanceof Error && error.message.startsWith('Erro ao buscar preço:')) {
-          throw error;
-        }
-        lastError = error;
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Bybit HTTP ${response.status} em ${path}`);
+      }
+      const data = await response.json();
+      if (data.retCode !== 0) {
+        throw new Error(`Bybit retCode ${data.retCode}: ${data.retMsg} (${path})`);
+      }
+      return data.result as T;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
-
-    if (attempt < retries) {
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-    }
   }
-
-  console.error(`Erro ao buscar preço para ${symbol} (tentativas: ${candidates.join(', ')}):`, lastError);
-  throw lastError instanceof Error ? lastError : new Error('Erro ao buscar preço');
+  throw lastError instanceof Error ? lastError : new Error(`Erro Bybit em ${path}`);
 }
 
 /**
- * Lista de símbolos padrão para análise
+ * Velas em ordem cronológica (mais antiga primeiro).
+ * Por omissão exclui a vela ainda em formação, para os sinais só usarem velas fechadas.
+ * `limit` acima de 1000 é paginado automaticamente.
  */
-export const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
+export async function fetchCandles(
+  symbol: string,
+  timeframe: Timeframe,
+  limit: number = 200,
+  options: { endTime?: number; includeOpenCandle?: boolean } = {}
+): Promise<Candle[]> {
+  const interval = BYBIT_INTERVALS[timeframe];
+  if (!interval) throw new Error(`Timeframe não suportado: ${timeframe}`);
 
-/**
- * Intervalos de tempo suportados
- */
-export const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'] as const;
-export type Timeframe = typeof TIMEFRAMES[number];
+  const wanted = options.includeOpenCandle ? limit : limit + 1;
+  const out: Candle[] = [];
+  let end = options.endTime;
 
-/**
- * Interface para dados de Top Movers
- */
-export interface TopMover {
+  while (out.length < wanted) {
+    const batch = Math.min(1000, wanted - out.length);
+    const result = await bybitGet<{ list: string[][] }>('/v5/market/kline', {
+      category: 'linear',
+      symbol,
+      interval,
+      limit: batch,
+      end,
+    });
+    const rows = result.list || [];
+    if (rows.length === 0) break;
+    // Bybit devolve a mais recente primeiro
+    for (const c of rows) {
+      out.push({
+        timestamp: Number(c[0]),
+        open: parseFloat(c[1]),
+        high: parseFloat(c[2]),
+        low: parseFloat(c[3]),
+        close: parseFloat(c[4]),
+        volume: parseFloat(c[5]),
+      });
+    }
+    if (rows.length < batch) break;
+    end = Number(rows[rows.length - 1][0]) - 1;
+  }
+
+  out.sort((a, b) => a.timestamp - b.timestamp);
+  const deduped = out.filter((c, i) => i === 0 || c.timestamp !== out[i - 1].timestamp);
+
+  if (!options.includeOpenCandle) {
+    const now = Date.now();
+    const step = TIMEFRAME_MS[timeframe];
+    while (deduped.length && deduped[deduped.length - 1].timestamp + step > now) {
+      deduped.pop();
+    }
+  }
+  return deduped.slice(-limit);
+}
+
+export async function fetchCurrentPrice(symbol: string): Promise<number> {
+  const result = await bybitGet<{ list: Array<{ lastPrice: string }> }>('/v5/market/tickers', {
+    category: 'linear',
+    symbol,
+  });
+  const price = parseFloat(result.list?.[0]?.lastPrice);
+  if (!Number.isFinite(price)) throw new Error(`Preço indisponível para ${symbol}`);
+  return price;
+}
+
+export type AssetType = 'stock' | 'ETF';
+
+export interface UniverseAsset {
   symbol: string;
-  priceChangePercent: number;
+  baseCoin: string;
+  type: AssetType;
   lastPrice: number;
-  volume: number;
-  highPrice: number;
-  lowPrice: number;
+  price24hPcnt: number;
+  turnover24h: number;
 }
 
+let universeCache: { at: number; assets: UniverseAsset[] } | null = null;
+const UNIVERSE_TTL_MS = 60 * 60_000;
+
 /**
- * Busca os Top Movers (maiores ganhadores) da Binance Futures USDⓈ-M
- * Calcula a variação percentual desde o início do dia atual (00:00 UTC)
- * Filtra apenas pares USDⓈ-M e ordena por variação percentual decrescente
- * @param limit Número máximo de resultados (padrão: 15)
+ * Ações + ETFs em negociação na Bybit (perpétuos USDT), com volume 24h.
+ * Ordenado por turnover 24h (USDT) decrescente. Cache de 1h.
  */
-export async function fetchTopMovers(limit: number = 15): Promise<TopMover[]> {
-  try {
-    // Buscar todos os tickers 24h para obter lista de símbolos e preços atuais
-    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
+export async function fetchStockUniverse(options: {
+  types?: AssetType[];
+  minTurnover24h?: number;
+} = {}): Promise<UniverseAsset[]> {
+  const types = options.types ?? ['stock', 'ETF'];
+  const minTurnover = options.minTurnover24h ?? 0;
 
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar dados: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    // Filtrar apenas pares USDⓈ-M (Futuros com margem em USDT) com volume mínimo
-    // Ordenar por volume para priorizar os mais líquidos
-    const usdtPairs = data
-      .filter((ticker: any) => {
-        return ticker.symbol.endsWith('USDT') && 
-               !ticker.symbol.includes('BUSD') &&
-               parseFloat(ticker.quoteVolume) > 1000000; // Volume mínimo de 1M USDT
-      })
-      .sort((a: any, b: any) => {
-        return parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume);
-      })
-      .slice(0, 50); // Limitar a 50 símbolos mais líquidos para otimizar
-
-    // Buscar candles diários para obter preço de abertura do dia atual
-    // Usar Promise.all com limite de concorrência para não sobrecarregar a API
-    const topMoversData = await Promise.all(
-      usdtPairs.map(async (ticker: any) => {
-        try {
-          // Buscar candles diários (apenas o último candle que contém o dia atual)
-          const candlesResponse = await fetch(
-            `https://fapi.binance.com/fapi/v1/klines?symbol=${ticker.symbol}&interval=1d&limit=1`
-          );
-          
-          if (!candlesResponse.ok) {
-            return null;
-          }
-
-          const candles = await candlesResponse.json();
-          
-          if (candles.length === 0) {
-            return null;
-          }
-
-          // O último candle é o do dia atual
-          const todayCandle = candles[candles.length - 1];
-          const openPrice = parseFloat(todayCandle[1]); // Preço de abertura
-          const currentPrice = parseFloat(ticker.lastPrice);
-          const highPrice = parseFloat(todayCandle[2]); // Máxima do dia
-          const lowPrice = parseFloat(todayCandle[3]); // Mínima do dia
-          
-          // Calcular variação percentual do dia atual
-          const priceChangePercent = ((currentPrice - openPrice) / openPrice) * 100;
-
-          return {
-            symbol: ticker.symbol,
-            priceChangePercent,
-            lastPrice: currentPrice,
-            volume: parseFloat(ticker.volume),
-            highPrice,
-            lowPrice,
-          };
-        } catch (error) {
-          console.error(`Erro ao buscar dados para ${ticker.symbol}:`, error);
-          return null;
-        }
-      })
-    );
-
-    // Filtrar nulos e apenas ganhadores (variação positiva)
-    const validMovers = topMoversData
-      .filter((mover): mover is NonNullable<typeof mover> => 
-        mover !== null && mover.priceChangePercent > 0
+  if (!universeCache || Date.now() - universeCache.at > UNIVERSE_TTL_MS) {
+    const instruments: Array<{ symbol: string; baseCoin: string; status: string; symbolType?: string }> = [];
+    let cursor: string | undefined;
+    do {
+      const page = await bybitGet<{ list: typeof instruments; nextPageCursor?: string }>(
+        '/v5/market/instruments-info',
+        { category: 'linear', limit: 1000, cursor }
       );
+      instruments.push(...(page.list || []));
+      cursor = page.nextPageCursor || undefined;
+    } while (cursor);
 
-    // Ordenar por priceChangePercent decrescente
-    const sorted = validMovers.sort((a, b) => {
-      return b.priceChangePercent - a.priceChangePercent;
-    });
+    const tickers = await bybitGet<{
+      list: Array<{ symbol: string; lastPrice: string; price24hPcnt: string; turnover24h: string }>;
+    }>('/v5/market/tickers', { category: 'linear' });
+    const tickerBySymbol = new Map(tickers.list.map((t) => [t.symbol, t]));
 
-    // Retornar os top N
-    return sorted.slice(0, limit);
-  } catch (error) {
-    console.error('Erro ao buscar Top Movers:', error);
-    throw error;
-  }
-}
-
-/**
- * Busca os top N símbolos USDT perpetual por quoteVolume 24h
- * @param limit Número máximo de símbolos (padrão: 50)
- * @param minQuoteVolume Volume mínimo em USDT (padrão: 0, sem filtro)
- */
-export async function fetchTopSymbolsByVolume(
-  limit: number = 50,
-  minQuoteVolume: number = 0
-): Promise<string[]> {
-  try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
-
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar dados: ${response.statusText}`);
+    const assets: UniverseAsset[] = [];
+    for (const inst of instruments) {
+      if (inst.status !== 'Trading') continue;
+      if (inst.symbolType !== 'stock' && inst.symbolType !== 'ETF') continue;
+      const t = tickerBySymbol.get(inst.symbol);
+      assets.push({
+        symbol: inst.symbol,
+        baseCoin: inst.baseCoin,
+        type: inst.symbolType,
+        lastPrice: t ? parseFloat(t.lastPrice) : NaN,
+        price24hPcnt: t ? parseFloat(t.price24hPcnt) * 100 : NaN,
+        turnover24h: t ? parseFloat(t.turnover24h) : 0,
+      });
     }
-
-    const data = await response.json();
-
-    // Filtrar apenas pares USDT perpetual
-    const usdtPairs = data
-      .filter((ticker: any) => {
-        return (
-          ticker.symbol.endsWith('USDT') &&
-          !ticker.symbol.includes('BUSD') &&
-          parseFloat(ticker.quoteVolume) >= minQuoteVolume
-        );
-      })
-      .map((ticker: any) => ({
-        symbol: ticker.symbol,
-        quoteVolume: parseFloat(ticker.quoteVolume),
-      }));
-
-    // Ordenar por quoteVolume decrescente
-    const sorted = usdtPairs.sort((a: any, b: any) => {
-      return b.quoteVolume - a.quoteVolume;
-    });
-
-    // Retornar apenas os símbolos
-    return sorted.slice(0, limit).map((item: any) => item.symbol);
-  } catch (error) {
-    console.error('Erro ao buscar top símbolos por volume:', error);
-    throw error;
+    assets.sort((a, b) => b.turnover24h - a.turnover24h);
+    universeCache = { at: Date.now(), assets };
   }
-}
 
-/**
- * Busca os top N símbolos USDT perpetual por variação percentual de preço 24h
- * Ordena por priceChangePercent (maior subida primeiro)
- * @param limit Número máximo de símbolos (padrão: 50)
- * @param minQuoteVolume Volume mínimo em USDT para filtrar pares mortos (padrão: 0)
- */
-export async function fetchTopSymbolsBy24hPriceChange(
-  limit: number = 50,
-  minQuoteVolume: number = 0
-): Promise<string[]> {
-  try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
-
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar dados: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    const usdtPairs = data
-      .filter((ticker: any) => {
-        return (
-          ticker.symbol.endsWith('USDT') &&
-          !ticker.symbol.includes('BUSD') &&
-          parseFloat(ticker.quoteVolume) >= minQuoteVolume
-        );
-      })
-      .map((ticker: any) => ({
-        symbol: ticker.symbol,
-        priceChangePercent: parseFloat(ticker.priceChangePercent || '0'),
-      }));
-
-    // Ordenar por priceChangePercent decrescente (maior subida primeiro)
-    const sorted = usdtPairs.sort((a: any, b: any) => {
-      return b.priceChangePercent - a.priceChangePercent;
-    });
-
-    return sorted.slice(0, limit).map((item: any) => item.symbol);
-  } catch (error) {
-    console.error('Erro ao buscar top símbolos por % 24h:', error);
-    throw error;
-  }
-}
-
-/** Atraso em ms (evitar rate limit da Binance) */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Linha de ranking por variação % na última hora (velas 1h na Binance Futures).
- */
-export type Symbol1hRiserRow = {
-  symbol: string;
-  changePercent1h: number;
-  lastClose: number;
-};
-
-async function fetchSorted1hRisers(candidatePool: number): Promise<Symbol1hRiserRow[]> {
-  const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
-  if (!response.ok) {
-    throw new Error(`Erro ao buscar exchangeInfo: ${response.statusText}`);
-  }
-  const data = await response.json();
-
-  const usdtPairs: string[] = (data.symbols || [])
-    .filter((s: any) => {
-      return (
-        s.symbol?.endsWith('USDT') &&
-        !s.symbol?.includes('BUSD') &&
-        s.status === 'TRADING' &&
-        (s.contractType === 'PERPETUAL' || !s.contractType)
-      );
-    })
-    .slice(0, candidatePool)
-    .map((s: any) => s.symbol);
-
-  const results: Symbol1hRiserRow[] = [];
-
-  for (let i = 0; i < usdtPairs.length; i++) {
-    const symbol = usdtPairs[i];
-    try {
-      const klinesRes = await fetch(
-        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1h&limit=2`
-      );
-      if (!klinesRes.ok) continue;
-      const klines = await klinesRes.json();
-      if (klines.length < 2) continue;
-      const prevClose = parseFloat(klines[0][4]);
-      const lastClose = parseFloat(klines[1][4]);
-      if (prevClose === 0) continue;
-      const changePercent1h = ((lastClose - prevClose) / prevClose) * 100;
-      results.push({ symbol, changePercent1h, lastClose });
-    } catch {
-      // ignorar falha por símbolo
-    }
-    if ((i + 1) % 50 === 0) await delay(100);
-    else await delay(80);
-  }
-  results.sort((a, b) => b.changePercent1h - a.changePercent1h);
-  return results;
-}
-
-/**
- * Top N pares com maior subida % na última hora (entre os candidatos consultados).
- * @param onlyPositive se true (defeito), só inclui variação > 0% («a subir»).
- */
-export async function fetchTopSymbolsBy1hPriceChangeDetailed(
-  limit: number = 50,
-  candidatePool: number = 300,
-  onlyPositive: boolean = true
-): Promise<Symbol1hRiserRow[]> {
-  try {
-    const sorted = await fetchSorted1hRisers(candidatePool);
-    const filtered = onlyPositive ? sorted.filter((r) => r.changePercent1h > 0) : sorted;
-    return filtered.slice(0, limit);
-  } catch (error) {
-    console.error('Erro ao buscar símbolos por variação 1h (detalhe):', error);
-    throw error;
-  }
-}
-
-/**
- * Busca os símbolos com maior variação de preço na última hora (1h).
- * Não usa volume 24h: lista de candidatos vem do exchangeInfo (Binance Futures).
- * Ordena apenas por % de variação na última hora.
- * @param limit Número máximo de símbolos (padrão: 150)
- * @param candidatePool Quantos símbolos consultar (klines 1h) antes de ordenar (padrão: 250)
- */
-export async function fetchTopSymbolsBy1hPriceChange(
-  limit: number = 150,
-  candidatePool: number = 250
-): Promise<string[]> {
-  try {
-    const sorted = await fetchSorted1hRisers(candidatePool);
-    return sorted.slice(0, limit).map((r) => r.symbol);
-  } catch (error) {
-    console.error('Erro ao buscar símbolos por variação 1h:', error);
-    throw error;
-  }
+  return universeCache.assets.filter((a) => types.includes(a.type) && a.turnover24h >= minTurnover);
 }

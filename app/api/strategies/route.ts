@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { ensureMissingBuiltinStrategies } from '@/lib/ensureMissingBuiltinStrategies';
-import { findStrategiesWithUniverseFallback } from '@/lib/strategyQueries';
+import { syncStrategies } from '@/lib/signalEngine';
+import { STRATEGIES } from '@/lib/strategies';
 
-export async function GET(request: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
   try {
-    await ensureMissingBuiltinStrategies(prisma);
-    // Listagem pública — fallback se BD ainda não tiver SymbolUniverse / FK
-    const strategies = await findStrategiesWithUniverseFallback({ activeOnly: false });
-
+    await syncStrategies();
+    const registered = new Map(STRATEGIES.map((s) => [s.name, s]));
+    const rows = await prisma.strategy.findMany({
+      where: { name: { in: Array.from(registered.keys()) } },
+      orderBy: { displayName: 'asc' },
+    });
+    const strategies = rows.map((r) => {
+      const def = registered.get(r.name)!;
+      return {
+        ...r,
+        timeframe: def.timeframe,
+        universe: def.universe ?? null,
+        defaultParams: def.defaultParams,
+      };
+    });
     return NextResponse.json({ strategies });
   } catch (error) {
     console.error('Erro ao buscar estratégias:', error);
     return NextResponse.json(
-      {
-        error: 'Erro ao buscar estratégias',
-        details: error instanceof Error ? error.message : undefined,
-      },
+      { error: 'Erro ao buscar estratégias', details: error instanceof Error ? error.message : undefined },
       { status: 500 }
     );
   }
@@ -24,58 +34,22 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, isActive, params, symbolUniverseId, binanceExecutionOn } = body;
-
+    const { id, isActive, params } = await request.json();
     if (!id) {
-      return NextResponse.json(
-        { error: 'ID da estratégia é obrigatório' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'ID da estratégia é obrigatório' }, { status: 400 });
     }
 
-    const updateData: any = {};
-    if (typeof isActive === 'boolean') {
-      updateData.isActive = isActive;
-    }
-    if (typeof binanceExecutionOn === 'boolean') {
-      updateData.binanceExecutionOn = binanceExecutionOn;
-    }
-    if (params) {
-      updateData.params = JSON.stringify(params);
-    }
-    if (symbolUniverseId !== undefined) {
-      updateData.symbolUniverseId =
-        symbolUniverseId === null || symbolUniverseId === ''
-          ? null
-          : String(symbolUniverseId);
-    }
+    const data: { isActive?: boolean; params?: string } = {};
+    if (typeof isActive === 'boolean') data.isActive = isActive;
+    if (params && typeof params === 'object') data.params = JSON.stringify(params);
 
-    const strategy = await prisma.strategy.update({
-      where: { id },
-      data: updateData,
-      include: { symbolUniverse: true },
-    });
-
+    const strategy = await prisma.strategy.update({ where: { id }, data });
     return NextResponse.json({ strategy });
   } catch (error) {
     console.error('Erro ao atualizar estratégia:', error);
-    const msg = error instanceof Error ? error.message : '';
-    const schemaIssue =
-      msg.includes('symbolUniverse') ||
-      msg.includes('SymbolUniverse') ||
-      msg.includes('binanceExecutionOn') ||
-      msg.includes('does not exist');
     return NextResponse.json(
-      {
-        error: 'Erro ao atualizar estratégia',
-        details: msg,
-        hint: schemaIssue
-          ? 'Na Railway/hosting corre `npx prisma db push` para criar/atualizar colunas (SymbolUniverse, binanceExecutionOn em Strategy, etc.).'
-          : undefined,
-      },
+      { error: 'Erro ao atualizar estratégia', details: error instanceof Error ? error.message : undefined },
       { status: 500 }
     );
   }
 }
-

@@ -31,7 +31,6 @@ export async function GET(
         status24h: true,
         high24h: true,
         low24h: true,
-        strategy: { select: { binanceExecutionOn: true } },
         // executedAt/executionOrderId omitidos se BD não tiver
       },
     });
@@ -39,8 +38,6 @@ export async function GET(
     if (!signal) {
       return NextResponse.json({ error: 'Sinal não encontrado' }, { status: 404 });
     }
-
-    const strategyBinanceExecutionOn = signal.strategy?.binanceExecutionOn !== false;
 
     // Busca preço atual
     let currentPrice = null;
@@ -50,11 +47,8 @@ export async function GET(
       console.error('Erro ao buscar preço atual:', error);
     }
 
-    const { strategy: _s, ...signalOut } = signal;
-
     return NextResponse.json({
-      signal: signalOut,
-      strategyBinanceExecutionOn,
+      signal,
       currentPrice,
     });
   } catch (error) {

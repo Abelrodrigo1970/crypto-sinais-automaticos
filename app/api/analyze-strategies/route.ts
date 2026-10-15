@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 const FEE_OPEN = 0.0005;
 const FEE_CLOSE = 0.0005;
 const TOTAL_FEE = FEE_OPEN + FEE_CLOSE;
