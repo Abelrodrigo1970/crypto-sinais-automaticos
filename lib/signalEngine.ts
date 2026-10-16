@@ -88,7 +88,11 @@ async function runStrategy(
 ): Promise<RunStats> {
   const params = { ...def.defaultParams, ...parseParams(dbStrategy.params) };
   const exclude = new Set<string>(Array.isArray(params.excludeSymbols) ? params.excludeSymbols : []);
-  const universe = await fetchStockUniverse(def.universe);
+  const include = new Set<string>(Array.isArray(params.includeSymbols) ? params.includeSymbols : []);
+  // Com lista fixa de ações, o filtro de volume 24h deixa de se aplicar (só têm de estar em negociação)
+  const universe = include.size
+    ? (await fetchStockUniverse({ ...def.universe, minTurnover24h: 0 })).filter((a) => include.has(a.symbol))
+    : await fetchStockUniverse(def.universe);
   const bySymbol = new Map(universe.map((a) => [a.symbol, a]));
   const stats: RunStats = { opened: 0, closed: 0, updated: 0 };
 

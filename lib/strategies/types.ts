@@ -58,7 +58,7 @@ export interface StrategyDefinition<P extends Record<string, unknown> = Record<s
   candleLimit: number;
   /** Universo: tipos de ativo e liquidez mínima (turnover 24h em USDT) */
   universe?: { types?: AssetType[]; minTurnover24h?: number };
-  /** Parâmetros por omissão; os da BD (editáveis na UI) sobrepõem-se. `excludeSymbols` retira ativos do universo. */
+  /** Parâmetros por omissão; os da BD (editáveis na UI) sobrepõem-se. `includeSymbols` limita o universo a uma lista; `excludeSymbols` retira ativos. */
   defaultParams: P;
   /** Entrada no fecho da última vela (só é chamada sem posição aberta nesse símbolo) */
   evaluate(ctx: StrategyContext<P>): StrategySignal | null;

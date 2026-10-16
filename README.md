@@ -23,7 +23,7 @@ Estratégias novas entram **inativas**; ativam-se na página **Estratégias**, o
 | `IBS` | IBS < 0.2 | (fecho − mínimo) / (máximo − mínimo) < 0,2 | Fecho > máximo da véspera |
 | `RMA` | Rel. Momentum Accel | Impulso (EMA7 − KAMA30)/KAMA30 > média 7d + 1σ | Trailing stop: máximo desde a entrada − 3×ATR(7) |
 
-- Só long, só ações com mais de 1M USDT de volume 24h; `excludeSymbols` retira as 12 ações que perderam em 2+ estratégias no backtest 01/2025–10/2026.
+- Só long, só nas **29 ações selecionadas** no backtest 01/2025–10/2026 (`includeSymbols`, em `lib/strategies/common.ts`); com a lista definida o filtro de volume não se aplica. Lista vazia = todas as ações com mais de 1M USDT de volume 24h.
 - Os sinais usam as **velas diárias da ação subjacente** (Yahoo, sessão regular, ajustadas a splits) — os mesmos dados do backtest; `lib/underlyingData.ts` valida o mapeamento comparando com o preço Bybit.
 - Cada sinal é uma **posição** (`status` OPEN → CLOSED): entra ao preço Bybit no primeiro run depois do fecho e sai quando a regra de saída dispara (`exitPrice`, `resultPct`, `exitReason`).
 - O código foi validado contra o backtest em Python: 651 de 652 trades idênticos (8 ações, 01/2025–10/2026).

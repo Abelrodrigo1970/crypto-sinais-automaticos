@@ -1,12 +1,16 @@
 import type { AssetType } from '../marketData';
 
 /**
- * Ações excluídas por terem retorno negativo em 2+ das 4 estratégias no backtest
- * de 01/01/2025 a 15/10/2026. Editável por estratégia em `params.excludeSymbols`.
+ * As 29 ações selecionadas no backtest de 01/01/2025 a 15/10/2026: só ações (sem ETFs),
+ * sem as 12 com retorno negativo em 2+ estratégias, e com as 4 estratégias testadas
+ * (SPCX e PURR ficaram de fora por não terem 200 dias de histórico).
+ * Editável por estratégia em `params.includeSymbols` (lista vazia = todo o universo).
  */
-export const BACKTEST_EXCLUDED = [
-  'ARMUSDT', 'CBRSUSDT', 'COINUSDT', 'CRCLUSDT', 'CRWVUSDT', 'FLYUSDT',
-  'IRENUSDT', 'METAUSDT', 'MSTRUSDT', 'ORCLUSDT', 'TSLAUSDT', 'WENSTOCKUSDT',
+export const SELECTED_STOCKS = [
+  'AAOIUSDT', 'AAPLUSDT', 'AMDSTOCKUSDT', 'AMZNUSDT', 'AVGOUSDT', 'AXTIUSDT', 'BEUSDT', 'BMNRUSDT',
+  'DELLUSDT', 'GOOGLUSDT', 'HOODUSDT', 'INTCUSDT', 'LITEUSDT', 'MRNAUSDT', 'MRVLUSDT', 'MSFTUSDT',
+  'MUUSDT', 'NBISUSDT', 'NVDAUSDT', 'PENGSTOCKUSDT', 'PLTRUSDT', 'POETUSDT', 'RKLBUSDT', 'SAMSUNGUSDT',
+  'SKHYNIXUSDT', 'SNDKUSDT', 'TSEMUSDT', 'TSMUSDT', 'WDCUSDT',
 ];
 
 /** Universo dos backtests: só ações, com mais de 1M USDT de volume em 24h */

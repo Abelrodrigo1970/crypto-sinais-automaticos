@@ -1,8 +1,8 @@
 import type { StrategyDefinition } from './types';
-import { BACKTEST_EXCLUDED, STOCK_UNIVERSE, barIndex } from './common';
+import { SELECTED_STOCKS, STOCK_UNIVERSE, barIndex } from './common';
 import { atr, ema, kama, rollingStd, sma } from './series';
 
-type Params = { kamaPeriod: number; fastEma: number; bandPeriod: number; atrPeriod: number; atrStop: number; excludeSymbols: string[] };
+type Params = { kamaPeriod: number; fastEma: number; bandPeriod: number; atrPeriod: number; atrStop: number; includeSymbols: string[]; excludeSymbols: string[] };
 
 /**
  * Relative Momentum Accel (ali-azary/Algorithmic-Trading-From-Beginner-to-Advanced), só long.
@@ -18,7 +18,7 @@ export const rma: StrategyDefinition<Params> = {
   source: 'underlying',
   candleLimit: 120,
   universe: STOCK_UNIVERSE,
-  defaultParams: { kamaPeriod: 30, fastEma: 7, bandPeriod: 7, atrPeriod: 7, atrStop: 3, excludeSymbols: BACKTEST_EXCLUDED },
+  defaultParams: { kamaPeriod: 30, fastEma: 7, bandPeriod: 7, atrPeriod: 7, atrStop: 3, includeSymbols: SELECTED_STOCKS, excludeSymbols: [] },
 
   evaluate({ candles, params }) {
     const closes = candles.map((c) => c.close);

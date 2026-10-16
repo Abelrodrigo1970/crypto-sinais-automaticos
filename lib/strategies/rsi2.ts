@@ -1,8 +1,8 @@
 import type { StrategyDefinition } from './types';
-import { BACKTEST_EXCLUDED, STOCK_UNIVERSE } from './common';
+import { SELECTED_STOCKS, STOCK_UNIVERSE } from './common';
 import { rsi, sma } from './series';
 
-type Params = { rsiPeriod: number; rsiMax: number; trendPeriod: number; exitPeriod: number; excludeSymbols: string[] };
+type Params = { rsiPeriod: number; rsiMax: number; trendPeriod: number; exitPeriod: number; includeSymbols: string[]; excludeSymbols: string[] };
 
 /**
  * Connors RSI-2: compra quedas curtas em tendência de subida e sai no primeiro ressalto.
@@ -17,7 +17,7 @@ export const rsi2: StrategyDefinition<Params> = {
   source: 'underlying',
   candleLimit: 260,
   universe: STOCK_UNIVERSE,
-  defaultParams: { rsiPeriod: 2, rsiMax: 10, trendPeriod: 200, exitPeriod: 5, excludeSymbols: BACKTEST_EXCLUDED },
+  defaultParams: { rsiPeriod: 2, rsiMax: 10, trendPeriod: 200, exitPeriod: 5, includeSymbols: SELECTED_STOCKS, excludeSymbols: [] },
 
   evaluate({ candles, params }) {
     const closes = candles.map((c) => c.close);

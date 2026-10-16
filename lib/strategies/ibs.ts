@@ -1,7 +1,7 @@
 import type { StrategyDefinition } from './types';
-import { BACKTEST_EXCLUDED, STOCK_UNIVERSE } from './common';
+import { SELECTED_STOCKS, STOCK_UNIVERSE } from './common';
 
-type Params = { ibsMax: number; excludeSymbols: string[] };
+type Params = { ibsMax: number; includeSymbols: string[]; excludeSymbols: string[] };
 
 /**
  * Internal Bar Strength: compra quando fecha perto do mínimo do dia
@@ -17,7 +17,7 @@ export const ibs: StrategyDefinition<Params> = {
   source: 'underlying',
   candleLimit: 60,
   universe: STOCK_UNIVERSE,
-  defaultParams: { ibsMax: 0.2, excludeSymbols: BACKTEST_EXCLUDED },
+  defaultParams: { ibsMax: 0.2, includeSymbols: SELECTED_STOCKS, excludeSymbols: [] },
 
   evaluate({ candles, params }) {
     const c = candles[candles.length - 1];
