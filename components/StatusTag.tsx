@@ -5,6 +5,18 @@ interface StatusTagProps {
 export default function StatusTag({ status }: StatusTagProps) {
   const getStatusConfig = (status: string) => {
     switch (status) {
+      case 'OPEN':
+        return {
+          label: 'Aberta',
+          className:
+            'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+        };
+      case 'CLOSED':
+        return {
+          label: 'Fechada',
+          className:
+            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+        };
       case 'NEW':
         return {
           label: 'Novo',

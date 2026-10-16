@@ -13,6 +13,7 @@ interface SignalFiltersProps {
     timeframe: string;
     strategy: string;
     minStrength: string;
+    status: string;
   };
   onFilterChange: (filters: any) => void;
   onReset: () => void;
@@ -37,18 +38,33 @@ export default function SignalFilters({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Par
+            Ação
           </label>
           <input
             type="text"
-            placeholder="BTC, ETH..."
+            placeholder="NVDA, MU..."
             value={filters.symbol}
             onChange={(e) => onFilterChange({ ...filters, symbol: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Estado
+          </label>
+          <select
+            value={filters.status}
+            onChange={(e) => onFilterChange({ ...filters, status: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          >
+            <option value="">Todas</option>
+            <option value="OPEN">Abertas</option>
+            <option value="CLOSED">Fechadas</option>
+          </select>
         </div>
 
         <div>

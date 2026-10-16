@@ -31,6 +31,11 @@ export async function GET(
         status24h: true,
         high24h: true,
         low24h: true,
+        barTime: true,
+        exitPrice: true,
+        exitAt: true,
+        resultPct: true,
+        exitReason: true,
         // executedAt/executionOrderId omitidos se BD não tiver
       },
     });

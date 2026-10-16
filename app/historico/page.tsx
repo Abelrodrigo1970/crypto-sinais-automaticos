@@ -12,7 +12,7 @@ interface Signal {
   timeframe: string;
   strategyName: string;
   entryPrice: number;
-  stopLoss: number;
+  stopLoss: number | null;
   target1: number | null;
   strength: number;
   status?: string;

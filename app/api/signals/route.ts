@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const onlyOpen = searchParams.get('onlyOpen') === 'true';
+    const status = searchParams.get('status');
     const limit = Math.min(parseInt(searchParams.get('limit') || '1000', 10) || 1000, 5000);
 
     const where: any = {};
@@ -34,6 +35,9 @@ export async function GET(request: NextRequest) {
     }
     if (direction && (direction === 'BUY' || direction === 'SELL')) {
       where.direction = direction;
+    }
+    if (status === 'OPEN' || status === 'CLOSED') {
+      where.status = status;
     }
     if (timeframe) {
       where.timeframe = timeframe;
@@ -108,6 +112,11 @@ export async function GET(request: NextRequest) {
         status24h: true,
         high24h: true,
         low24h: true,
+        barTime: true,
+        exitPrice: true,
+        exitAt: true,
+        resultPct: true,
+        exitReason: true,
         // executedAt/executionOrderId omitidos para BD sem essas colunas
         // Não incluir relation strategy: evita JOIN na tabela Strategy (schema antigo na BD quebra com novas colunas)
       },

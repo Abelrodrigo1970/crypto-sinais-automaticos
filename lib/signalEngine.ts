@@ -1,14 +1,18 @@
 /**
- * Motor de sinais: corre as estratégias registadas em lib/strategies sobre
- * o universo de ações/ETFs da Bybit e grava os sinais novos.
+ * Motor de sinais: corre as estratégias registadas em lib/strategies sobre o universo
+ * de ações da Bybit. Cada sinal é uma posição: abre no fecho da vela de entrada e fecha
+ * quando a regra de saída da estratégia dispara.
  */
 
 import { prisma } from './db';
-import { fetchCandles, fetchStockUniverse, type Candle } from './marketData';
+import { fetchCandles, fetchCurrentPrice, fetchStockUniverse, type Candle, type UniverseAsset } from './marketData';
+import { fetchUnderlyingDaily } from './underlyingData';
 import { STRATEGIES } from './strategies';
 import type { StrategyDefinition } from './strategies/types';
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 4;
+/** Só entra se a vela de sinal abriu há menos disto (evita entradas atrasadas no dia seguinte) */
+const ENTRY_MAX_BAR_AGE_MS = 22 * 60 * 60_000;
 
 /** Garante uma linha em Strategy por cada estratégia registada; desativa as que saíram do registo. */
 export async function syncStrategies(): Promise<void> {
@@ -52,39 +56,96 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
   await Promise.all(workers);
 }
 
+type Series = { candles: Candle[]; priceScale: number; ticker?: string };
+
+/** Velas da estratégia + fator para converter níveis em preço Bybit. Cache partilhada na corrida. */
+function makeLoader(cache: Map<string, Promise<Series | null>>) {
+  return (def: StrategyDefinition<any>, symbol: string, bybitPrice: number): Promise<Series | null> => {
+    const key = `${def.source}|${symbol}|${def.timeframe}|${def.candleLimit}`;
+    if (!cache.has(key)) {
+      cache.set(
+        key,
+        def.source === 'underlying'
+          ? fetchUnderlyingDaily(symbol, bybitPrice, def.candleLimit)
+          : fetchCandles(symbol, def.timeframe, def.candleLimit).then((candles) => ({ candles, priceScale: 1 }))
+      );
+    }
+    return cache.get(key)!;
+  };
+}
+
+export interface RunStats {
+  opened: number;
+  closed: number;
+  updated: number;
+}
+
 async function runStrategy(
   def: StrategyDefinition<any>,
   dbStrategy: { id: string; displayName: string; params: string },
-  candleCache: Map<string, Promise<Candle[]>>
-): Promise<number> {
+  load: ReturnType<typeof makeLoader>
+): Promise<RunStats> {
   const params = { ...def.defaultParams, ...parseParams(dbStrategy.params) };
-  const assets = await fetchStockUniverse(def.universe);
-  const cooldownMs = (def.cooldownHours ?? 24) * 60 * 60_000;
-  let created = 0;
+  const exclude = new Set<string>(Array.isArray(params.excludeSymbols) ? params.excludeSymbols : []);
+  const universe = await fetchStockUniverse(def.universe);
+  const bySymbol = new Map(universe.map((a) => [a.symbol, a]));
+  const stats: RunStats = { opened: 0, closed: 0, updated: 0 };
 
-  await mapLimit(assets, CONCURRENCY, async (asset) => {
+  // 1) Posições abertas: sair ou atualizar o stop (mesmo que o ativo já não esteja no universo)
+  const open = await prisma.signal.findMany({ where: { strategyId: dbStrategy.id, status: 'OPEN' } });
+  const openSymbols = new Set(open.map((s) => s.symbol));
+  await mapLimit(open, CONCURRENCY, async (sig) => {
     try {
-      const key = `${asset.symbol}|${def.timeframe}|${def.candleLimit}`;
-      if (!candleCache.has(key)) {
-        candleCache.set(key, fetchCandles(asset.symbol, def.timeframe, def.candleLimit));
+      const price = bySymbol.get(sig.symbol)?.lastPrice ?? (await fetchCurrentPrice(sig.symbol));
+      const series = await load(def, sig.symbol, price);
+      if (!series || !sig.barTime) return;
+      const info = JSON.parse(sig.extraInfo || '{}');
+      const scale: number = info.priceScale ?? series.priceScale;
+      const asset = bySymbol.get(sig.symbol) ?? ({ symbol: sig.symbol } as UniverseAsset);
+      const decision = def.manage(
+        { symbol: sig.symbol, asset, candles: series.candles, params },
+        { direction: sig.direction as 'BUY' | 'SELL', entryBarTime: sig.barTime.getTime(), entryRefPrice: info.refPrice }
+      );
+      const stopLoss = decision.stopLoss == null ? sig.stopLoss : decision.stopLoss * scale;
+      if (decision.exit) {
+        const resultPct = ((price - sig.entryPrice) / sig.entryPrice) * 100 * (sig.direction === 'BUY' ? 1 : -1);
+        await prisma.signal.update({
+          where: { id: sig.id },
+          data: { status: 'CLOSED', exitPrice: price, exitAt: new Date(), resultPct, exitReason: decision.reason, stopLoss, lastCheckedAt: new Date() },
+        });
+        stats.closed++;
+        openSymbols.delete(sig.symbol); // como no backtest, pode voltar a entrar no fecho desta mesma vela
+      } else {
+        await prisma.signal.update({ where: { id: sig.id }, data: { stopLoss, lastCheckedAt: new Date() } });
+        stats.updated++;
       }
-      const candles = await candleCache.get(key)!;
-      if (candles.length < def.candleLimit) return;
+    } catch (error) {
+      console.error(`[${def.name}] erro a gerir ${sig.symbol}:`, error instanceof Error ? error.message : error);
+    }
+  });
 
-      const signal = def.evaluate({ symbol: asset.symbol, asset, candles, params });
-      if (!signal) return;
+  // 2) Entradas novas nos ativos sem posição aberta
+  const candidates = universe.filter((a) => !exclude.has(a.symbol) && !openSymbols.has(a.symbol));
+  await mapLimit(candidates, CONCURRENCY, async (asset) => {
+    try {
+      const series = await load(def, asset.symbol, asset.lastPrice);
+      if (!series || series.candles.length < def.candleLimit) return;
+      const last = series.candles[series.candles.length - 1];
+      if (Date.now() - last.timestamp > ENTRY_MAX_BAR_AGE_MS) return;
 
-      const recent = await prisma.signal.findFirst({
-        where: {
-          strategyId: dbStrategy.id,
-          symbol: asset.symbol,
-          direction: signal.direction,
-          generatedAt: { gte: new Date(Date.now() - cooldownMs) },
-        },
+      const barTime = new Date(last.timestamp);
+      const already = await prisma.signal.findFirst({
+        where: { strategyId: dbStrategy.id, symbol: asset.symbol, barTime },
         select: { id: true },
       });
-      if (recent) return;
+      if (already) return;
 
+      const signal = def.evaluate({ symbol: asset.symbol, asset, candles: series.candles, params });
+      if (!signal) return;
+
+      const entryPrice = asset.lastPrice;
+      const scale = entryPrice / last.close;
+      const toBybit = (v?: number) => (v == null ? null : v * scale);
       await prisma.signal.create({
         data: {
           symbol: asset.symbol,
@@ -92,27 +153,31 @@ async function runStrategy(
           timeframe: def.timeframe,
           strategyId: dbStrategy.id,
           strategyName: dbStrategy.displayName,
-          entryPrice: signal.entryPrice,
-          stopLoss: signal.stopLoss,
-          target1: signal.target1 ?? null,
-          target2: signal.target2 ?? null,
-          target3: signal.target3 ?? null,
+          entryPrice,
+          stopLoss: toBybit(signal.stopLoss),
+          target1: toBybit(signal.target1),
+          target2: toBybit(signal.target2),
+          target3: toBybit(signal.target3),
           strength: Math.max(0, Math.min(100, Math.round(signal.strength))),
+          status: 'OPEN',
+          barTime,
           extraInfo: JSON.stringify({
-            assetType: asset.type,
-            candleTime: candles[candles.length - 1].timestamp,
-            params,
+            source: def.source,
+            ticker: series.ticker ?? asset.symbol,
+            refPrice: last.close,
+            priceScale: scale,
+            barTime: last.timestamp,
             ...signal.info,
           }),
         },
       });
-      created++;
+      stats.opened++;
     } catch (error) {
       console.error(`[${def.name}] erro em ${asset.symbol}:`, error instanceof Error ? error.message : error);
     }
   });
 
-  return created;
+  return stats;
 }
 
 export interface RunAllStrategiesOptions {
@@ -120,27 +185,29 @@ export interface RunAllStrategiesOptions {
   only?: string[];
 }
 
-/** Corre as estratégias ativas e devolve o nº de sinais criados. */
+/** Corre as estratégias ativas e devolve o nº de posições abertas nesta corrida. */
 export async function runAllStrategies(options: RunAllStrategiesOptions = {}): Promise<number> {
   await syncStrategies();
 
   const dbStrategies = await prisma.strategy.findMany({
     where: options.only?.length ? { name: { in: options.only } } : { isActive: true },
   });
-  const candleCache = new Map<string, Promise<Candle[]>>();
-  let total = 0;
+  const load = makeLoader(new Map());
+  let opened = 0;
 
   for (const dbStrategy of dbStrategies) {
     const def = STRATEGIES.find((s) => s.name === dbStrategy.name);
     if (!def) continue;
     const started = Date.now();
-    const created = await runStrategy(def, dbStrategy, candleCache);
-    total += created;
-    console.log(`[signalEngine] ${def.name}: ${created} sinais em ${((Date.now() - started) / 1000).toFixed(1)}s`);
+    const stats = await runStrategy(def, dbStrategy, load);
+    opened += stats.opened;
+    console.log(
+      `[signalEngine] ${def.name}: ${stats.opened} abertas, ${stats.closed} fechadas, ${stats.updated} atualizadas em ${((Date.now() - started) / 1000).toFixed(1)}s`
+    );
   }
 
   if (dbStrategies.length === 0) {
     console.log('[signalEngine] Nenhuma estratégia ativa.');
   }
-  return total;
+  return opened;
 }

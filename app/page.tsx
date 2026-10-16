@@ -13,7 +13,9 @@ interface Signal {
   timeframe: string;
   strategyName: string;
   entryPrice: number;
-  stopLoss: number;
+  stopLoss: number | null;
+  resultPct?: number | null;
+  exitPrice?: number | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;
@@ -40,6 +42,7 @@ export default function DashboardPage() {
     timeframe: '',
     strategy: '',
     minStrength: '60',
+    status: 'OPEN',
   });
 
   const fetchSignals = async () => {
@@ -50,6 +53,7 @@ export default function DashboardPage() {
       if (filters.direction) params.append('direction', filters.direction);
       if (filters.timeframe) params.append('timeframe', filters.timeframe);
       if (filters.strategy) params.append('strategy', filters.strategy);
+      if (filters.status) params.append('status', filters.status);
       // minStrength=0 = sem filtro de força na API
       if (filters.minStrength && filters.minStrength !== '0') {
         params.append('minStrength', filters.minStrength);
@@ -99,7 +103,7 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setMessage(data.message || `${data.signalsCreated} novo(s) sinal(is) gerado(s)`);
+        setMessage(data.message || `${data.signalsCreated} posição(ões) aberta(s)`);
         fetchSignals();
       } else {
         setMessage(data.error || 'Erro ao gerar sinais');
@@ -122,6 +126,7 @@ export default function DashboardPage() {
       timeframe: '',
       strategy: '',
       minStrength: '60', // Padrão: força >= 60
+      status: 'OPEN',
     });
   };
 
@@ -169,7 +174,7 @@ export default function DashboardPage() {
         ) : signals.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600 dark:text-gray-400">
-              Nenhum sinal encontrado. Clique em "Atualizar sinais agora" para gerar novos sinais.
+              Nenhuma posição encontrada com estes filtros. As estratégias correm sobre as velas diárias depois do fecho de Wall Street.
             </p>
           </div>
         ) : (

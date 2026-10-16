@@ -9,7 +9,9 @@ interface Signal {
   timeframe: string;
   strategyName: string;
   entryPrice: number;
-  stopLoss: number;
+  stopLoss: number | null;
+  resultPct?: number | null;
+  exitPrice?: number | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;
@@ -72,7 +74,7 @@ export default function SignalCard({ signal }: SignalCardProps) {
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400">Stop Loss</p>
             <p className="text-sm font-medium text-gray-900 dark:text-white">
-              ${formatPrice(signal.stopLoss)}
+              {signal.stopLoss == null ? 'Sem stop' : `$${formatPrice(signal.stopLoss)}`}
             </p>
           </div>
           {signal.target1 && (
@@ -98,6 +100,18 @@ export default function SignalCard({ signal }: SignalCardProps) {
             </div>
           </div>
         </div>
+
+        {signal.status === 'CLOSED' && signal.resultPct != null && (
+          <p
+            className={`text-sm font-medium mb-2 ${
+              signal.resultPct >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+            }`}
+          >
+            Resultado: {signal.resultPct >= 0 ? '+' : ''}
+            {signal.resultPct.toFixed(2)}%
+            {signal.exitPrice != null && ` (saída $${formatPrice(signal.exitPrice)})`}
+          </p>
+        )}
 
         <p className="text-xs text-gray-500 dark:text-gray-400">
           {formatDate(signal.generatedAt)}

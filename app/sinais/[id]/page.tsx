@@ -15,7 +15,11 @@ interface Signal {
   timeframe: string;
   strategyName: string;
   entryPrice: number;
-  stopLoss: number;
+  stopLoss: number | null;
+  exitPrice?: number | null;
+  exitAt?: string | null;
+  resultPct?: number | null;
+  exitReason?: string | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;
@@ -173,13 +177,22 @@ export default function SignalDetailPage() {
 
             <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Stop Loss</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                ${formatPrice(signal.stopLoss)}
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {calculateDistance(signal.stopLoss, signal.entryPrice, signal.direction).toFixed(2)}%
-                {signal.direction === 'BUY' ? ' abaixo' : ' acima'} da entrada
-              </p>
+              {signal.stopLoss == null ? (
+                <>
+                  <p className="text-2xl font-bold text-gray-500 dark:text-gray-400">Sem stop</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Sai pela regra da estratégia</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    ${formatPrice(signal.stopLoss)}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {calculateDistance(signal.stopLoss, signal.entryPrice, signal.direction).toFixed(2)}%
+                    {signal.direction === 'BUY' ? ' abaixo' : ' acima'} da entrada
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
@@ -198,6 +211,37 @@ export default function SignalDetailPage() {
             </div>
           </div>
 
+          {signal.status === 'CLOSED' && (
+            <div className="mb-8 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Posição fechada</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Saída</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">
+                    {signal.exitPrice != null ? `$${formatPrice(signal.exitPrice)}` : '–'}
+                  </p>
+                  {signal.exitAt && <p className="text-gray-500 dark:text-gray-400">{formatDate(signal.exitAt)}</p>}
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Resultado</p>
+                  <p
+                    className={`text-lg font-bold ${
+                      (signal.resultPct ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {signal.resultPct != null ? `${signal.resultPct >= 0 ? '+' : ''}${signal.resultPct.toFixed(2)}%` : '–'}
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">Sem custos de trading</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Motivo</p>
+                  <p className="text-gray-900 dark:text-white">{signal.exitReason ?? '–'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(signal.target1 || signal.target2 || signal.target3) && (
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Targets</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -242,6 +286,7 @@ export default function SignalDetailPage() {
               </div>
             </div>
           </div>
+          )}
 
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">

@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       signalsCreated,
-      message: `${signalsCreated} novo(s) sinal(is) gerado(s)`,
+      message: `${signalsCreated} posição(ões) aberta(s)`,
     });
   } catch (error) {
     console.error('Erro ao executar motor de sinais:', error);

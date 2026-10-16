@@ -31,12 +31,12 @@ model Signal {
   strategyId   String
   strategyName String   // denormalizado para facilitar leitura
   entryPrice   Float
-  stopLoss     Float
+  stopLoss     Float?   // null quando a estratégia não usa stop
   target1      Float?
   target2      Float?
   target3      Float?
   strength     Int      // 0-100
-  status       String   @default("NEW") // "NEW" | "IN_PROGRESS" | "HIT_TARGET" | "HIT_STOP" | "EXPIRED"
+  status       String   @default("OPEN") // "OPEN" (posição aberta) | "CLOSED" (saiu pela regra da estratégia)
   generatedAt  DateTime @default(now())
   lastCheckedAt DateTime?
   extraInfo    String?  // JSON string com detalhes do cálculo
@@ -45,6 +45,13 @@ model Signal {
   status24h    String?  // "CLOSED" quando já passaram 24h, null caso contrário
   high24h       Float?   // Preço mais alto durante as 24 horas
   low24h        Float?   // Preço mais baixo durante as 24 horas
+  /// Abertura da vela (diária) em cujo fecho se entrou
+  barTime      DateTime?
+  exitPrice    Float?
+  exitAt       DateTime?
+  /// Resultado da posição em %, já na direção do sinal (sem custos)
+  resultPct    Float?
+  exitReason   String?
   // executedAt e executionOrderId removidos - BD sem essas colunas (adicionar depois via migration)
 
   strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
@@ -53,4 +60,5 @@ model Signal {
   @@index([strategyId])
   @@index([generatedAt])
   @@index([status])
+  @@index([strategyId, symbol, status])
 }
