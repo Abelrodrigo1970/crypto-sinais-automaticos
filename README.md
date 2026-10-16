@@ -21,7 +21,7 @@ Estratégias novas entram **inativas**; ativam-se na página **Estratégias**, o
 |---|---|---|---|
 | `RSI2` | Connors RSI-2 | Preço > SMA200 e RSI(2) < 10 | Preço > SMA5 |
 | `IBS` | IBS < 0.2 | (fecho − mínimo) / (máximo − mínimo) < 0,2 | Fecho > máximo da véspera |
-| `RMA` | Rel. Momentum Accel | Impulso (EMA7 − KAMA30)/KAMA30 > média 7d + 1σ | Trailing stop: máximo desde a entrada − 3×ATR(7) |
+| `RMA` | Rel. Momentum Accel | Impulso (EMA7 − KAMA30)/KAMA30 > média 7d + 1σ, **só com QQQ > SMA50** | Trailing stop: máximo desde a entrada − 3×ATR(7) |
 
 - Só long, só nas **29 ações selecionadas** no backtest 01/2025–10/2026 (`includeSymbols`, em `lib/strategies/common.ts`); com a lista definida o filtro de volume não se aplica. Lista vazia = todas as ações com mais de 1M USDT de volume 24h.
 - Os sinais usam as **velas diárias da ação subjacente** (Yahoo, sessão regular, ajustadas a splits) — os mesmos dados do backtest; `lib/underlyingData.ts` valida o mapeamento comparando com o preço Bybit.
@@ -47,8 +47,8 @@ pela regra da estratégia. Saídas falhadas ou parciais repetem-se nas corridas 
 | `BYBIT_API_KEY` / `BYBIT_API_SECRET` | – | Chave com permissão de Contratos (ordens e posições), **sem levantamentos** |
 | `BYBIT_TRADING_ENABLED` | `false` | Tem de ser `true` para enviar ordens |
 | `BYBIT_TESTNET` | `false` | `true` usa api-testnet.bybit.com |
-| `BYBIT_POSITION_PCT` | `5` | % do saldo total (equity) por posição |
-| `BYBIT_MAX_POSITIONS` | `20` | Máximo de posições executadas abertas |
+| `BYBIT_POSITION_PCT` | `2` | % do saldo total (equity) por posição |
+| `BYBIT_MAX_POSITIONS` | `50` | Máximo de posições executadas abertas (2% × 50 = até 100% investido) |
 | `BYBIT_LEVERAGE` | `1` | Alavancagem definida em cada símbolo |
 | `BYBIT_MAX_SLIPPAGE_PCT` | `0.5` | Ordens limite IOC até este afastamento do último preço |
 

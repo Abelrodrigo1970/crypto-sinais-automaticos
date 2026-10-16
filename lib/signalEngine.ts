@@ -6,9 +6,9 @@
 
 import { prisma } from './db';
 import { fetchCandles, fetchCurrentPrice, fetchStockUniverse, type Candle, type UniverseAsset } from './marketData';
-import { fetchUnderlyingDaily } from './underlyingData';
+import { fetchUnderlyingDaily, fetchYahooDaily } from './underlyingData';
 import { STRATEGIES } from './strategies';
-import type { StrategyDefinition } from './strategies/types';
+import type { MarketContext, StrategyDefinition } from './strategies/types';
 import { EXIT_RETRY_STATUSES, canClose, canOpen, closePosition, openPosition } from './bybitTrading';
 
 const CONCURRENCY = 4;
@@ -84,7 +84,8 @@ export interface RunStats {
 async function runStrategy(
   def: StrategyDefinition<any>,
   dbStrategy: { id: string; displayName: string; params: string; tradingOn: boolean },
-  load: ReturnType<typeof makeLoader>
+  load: ReturnType<typeof makeLoader>,
+  market: MarketContext | undefined
 ): Promise<RunStats> {
   const params = { ...def.defaultParams, ...parseParams(dbStrategy.params) };
   const exclude = new Set<string>(Array.isArray(params.excludeSymbols) ? params.excludeSymbols : []);
@@ -163,7 +164,7 @@ async function runStrategy(
       });
       if (already) return;
 
-      const signal = def.evaluate({ symbol: asset.symbol, asset, candles: series.candles, params });
+      const signal = def.evaluate({ symbol: asset.symbol, asset, candles: series.candles, params, market });
       if (!signal) return;
 
       const entryPrice = asset.lastPrice;
@@ -218,12 +219,23 @@ export async function runAllStrategies(options: RunAllStrategiesOptions = {}): P
   });
   const load = makeLoader(new Map());
   let opened = 0;
+  let market: MarketContext | undefined;
+  if (dbStrategies.some((s) => STRATEGIES.find((d) => d.name === s.name)?.needsMarket)) {
+    try {
+      const { candles, sessionOpen } = await fetchYahooDaily('QQQ', '1y');
+      // durante a sessão a última vela ainda está em formação
+      if (sessionOpen && candles.length && Date.now() - candles[candles.length - 1].timestamp < 24 * 60 * 60_000) candles.pop();
+      market = { qqq: candles };
+    } catch (error) {
+      console.error('[signalEngine] sem dados do QQQ (estratégias com filtro de regime não entram):', error instanceof Error ? error.message : error);
+    }
+  }
 
   for (const dbStrategy of dbStrategies) {
     const def = STRATEGIES.find((s) => s.name === dbStrategy.name);
     if (!def) continue;
     const started = Date.now();
-    const stats = await runStrategy(def, dbStrategy, load);
+    const stats = await runStrategy(def, dbStrategy, load, def.needsMarket ? market : undefined);
     opened += stats.opened;
     console.log(
       `[signalEngine] ${def.name}: ${stats.opened} abertas, ${stats.closed} fechadas, ${stats.updated} atualizadas em ${((Date.now() - started) / 1000).toFixed(1)}s`

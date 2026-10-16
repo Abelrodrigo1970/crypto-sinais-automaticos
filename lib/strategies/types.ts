@@ -35,12 +35,19 @@ export interface ExitDecision {
   stopLoss?: number | null;
 }
 
+export interface MarketContext {
+  /** Velas diárias fechadas do QQQ (Nasdaq-100), mais antiga primeiro */
+  qqq: Candle[];
+}
+
 export interface StrategyContext<P> {
   symbol: string;
   asset: UniverseAsset;
   /** Velas fechadas do timeframe da estratégia, mais antiga primeiro */
   candles: Candle[];
   params: P;
+  /** Só presente para estratégias com needsMarket */
+  market?: MarketContext;
 }
 
 export interface StrategyDefinition<P extends Record<string, unknown> = Record<string, unknown>> {
@@ -56,6 +63,8 @@ export interface StrategyDefinition<P extends Record<string, unknown> = Record<s
   source: 'bybit' | 'underlying';
   /** Quantas velas fechadas a estratégia precisa */
   candleLimit: number;
+  /** Precisa do contexto de mercado (QQQ) em evaluate() */
+  needsMarket?: boolean;
   /** Universo: tipos de ativo e liquidez mínima (turnover 24h em USDT) */
   universe?: { types?: AssetType[]; minTurnover24h?: number };
   /** Parâmetros por omissão; os da BD (editáveis na UI) sobrepõem-se. `includeSymbols` limita o universo a uma lista; `excludeSymbols` retira ativos. */

@@ -25,8 +25,8 @@ export function tradingConfig() {
     envEnabled: process.env.BYBIT_TRADING_ENABLED === 'true',
     hasCredentials: hasCredentials(),
     testnet: isTestnet(),
-    positionPct: num(process.env.BYBIT_POSITION_PCT, 5),
-    maxPositions: num(process.env.BYBIT_MAX_POSITIONS, 20),
+    positionPct: num(process.env.BYBIT_POSITION_PCT, 2),
+    maxPositions: num(process.env.BYBIT_MAX_POSITIONS, 50),
     leverage: num(process.env.BYBIT_LEVERAGE, 1),
     maxSlippagePct: num(process.env.BYBIT_MAX_SLIPPAGE_PCT, 0.5),
   };
