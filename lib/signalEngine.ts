@@ -9,6 +9,7 @@ import { fetchCandles, fetchCurrentPrice, fetchStockUniverse, type Candle, type 
 import { fetchUnderlyingDaily } from './underlyingData';
 import { STRATEGIES } from './strategies';
 import type { StrategyDefinition } from './strategies/types';
+import { EXIT_RETRY_STATUSES, canClose, canOpen, closePosition, openPosition } from './bybitTrading';
 
 const CONCURRENCY = 4;
 /** Só entra se a vela de sinal abriu há menos disto (evita entradas atrasadas no dia seguinte) */
@@ -82,7 +83,7 @@ export interface RunStats {
 
 async function runStrategy(
   def: StrategyDefinition<any>,
-  dbStrategy: { id: string; displayName: string; params: string },
+  dbStrategy: { id: string; displayName: string; params: string; tradingOn: boolean },
   load: ReturnType<typeof makeLoader>
 ): Promise<RunStats> {
   const params = { ...def.defaultParams, ...parseParams(dbStrategy.params) };
@@ -109,11 +110,14 @@ async function runStrategy(
       const stopLoss = decision.stopLoss == null ? sig.stopLoss : decision.stopLoss * scale;
       if (decision.exit) {
         const resultPct = ((price - sig.entryPrice) / sig.entryPrice) * 100 * (sig.direction === 'BUY' ? 1 : -1);
-        await prisma.signal.update({
+        const closedSig = await prisma.signal.update({
           where: { id: sig.id },
           data: { status: 'CLOSED', exitPrice: price, exitAt: new Date(), resultPct, exitReason: decision.reason, stopLoss, lastCheckedAt: new Date() },
         });
         stats.closed++;
+        if (canClose() && closedSig.execStatus && ['FILLED', 'PARTIAL'].includes(closedSig.execStatus)) {
+          await closePosition(closedSig, price);
+        }
         openSymbols.delete(sig.symbol); // como no backtest, pode voltar a entrar no fecho desta mesma vela
       } else {
         await prisma.signal.update({ where: { id: sig.id }, data: { stopLoss, lastCheckedAt: new Date() } });
@@ -124,7 +128,22 @@ async function runStrategy(
     }
   });
 
+  // 1b) Saídas Bybit que falharam ou ficaram parciais em corridas anteriores
+  if (canClose()) {
+    const retries = await prisma.signal.findMany({
+      where: { strategyId: dbStrategy.id, status: 'CLOSED', execStatus: { in: EXIT_RETRY_STATUSES } },
+    });
+    for (const sig of retries) {
+      try {
+        await closePosition(sig, bySymbol.get(sig.symbol)?.lastPrice ?? (await fetchCurrentPrice(sig.symbol)));
+      } catch (error) {
+        console.error(`[${def.name}] erro a repetir saída ${sig.symbol}:`, error instanceof Error ? error.message : error);
+      }
+    }
+  }
+
   // 2) Entradas novas nos ativos sem posição aberta
+  const tradeEntries = await canOpen(dbStrategy.tradingOn);
   const candidates = universe.filter((a) => !exclude.has(a.symbol) && !openSymbols.has(a.symbol));
   await mapLimit(candidates, CONCURRENCY, async (asset) => {
     try {
@@ -146,7 +165,7 @@ async function runStrategy(
       const entryPrice = asset.lastPrice;
       const scale = entryPrice / last.close;
       const toBybit = (v?: number) => (v == null ? null : v * scale);
-      await prisma.signal.create({
+      const created = await prisma.signal.create({
         data: {
           symbol: asset.symbol,
           direction: signal.direction,
@@ -172,6 +191,7 @@ async function runStrategy(
         },
       });
       stats.opened++;
+      if (tradeEntries) await openPosition(created);
     } catch (error) {
       console.error(`[${def.name}] erro em ${asset.symbol}:`, error instanceof Error ? error.message : error);
     }

@@ -34,13 +34,14 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, isActive, params } = await request.json();
+    const { id, isActive, params, tradingOn } = await request.json();
     if (!id) {
       return NextResponse.json({ error: 'ID da estratégia é obrigatório' }, { status: 400 });
     }
 
-    const data: { isActive?: boolean; params?: string } = {};
+    const data: { isActive?: boolean; params?: string; tradingOn?: boolean } = {};
     if (typeof isActive === 'boolean') data.isActive = isActive;
+    if (typeof tradingOn === 'boolean') data.tradingOn = tradingOn;
     if (params && typeof params === 'object') data.params = JSON.stringify(params);
 
     const strategy = await prisma.strategy.update({ where: { id }, data });

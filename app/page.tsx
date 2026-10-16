@@ -16,6 +16,9 @@ interface Signal {
   stopLoss: number | null;
   resultPct?: number | null;
   exitPrice?: number | null;
+  execStatus?: string | null;
+  execQty?: number | null;
+  execEntryPrice?: number | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;

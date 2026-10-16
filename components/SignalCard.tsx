@@ -12,6 +12,9 @@ interface Signal {
   stopLoss: number | null;
   resultPct?: number | null;
   exitPrice?: number | null;
+  execStatus?: string | null;
+  execQty?: number | null;
+  execEntryPrice?: number | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;
@@ -110,6 +113,19 @@ export default function SignalCard({ signal }: SignalCardProps) {
             Resultado: {signal.resultPct >= 0 ? '+' : ''}
             {signal.resultPct.toFixed(2)}%
             {signal.exitPrice != null && ` (saída $${formatPrice(signal.exitPrice)})`}
+          </p>
+        )}
+
+        {signal.execStatus && (
+          <p
+            className={`text-xs font-medium mb-2 ${
+              ['FAILED', 'EXIT_FAILED', 'EXIT_PARTIAL'].includes(signal.execStatus)
+                ? 'text-red-600 dark:text-red-400'
+                : 'text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            Bybit: {signal.execStatus}
+            {signal.execQty && signal.execEntryPrice ? ` · ${signal.execQty} @ $${formatPrice(signal.execEntryPrice)}` : ''}
           </p>
         )}
 

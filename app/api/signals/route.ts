@@ -117,6 +117,12 @@ export async function GET(request: NextRequest) {
         exitAt: true,
         resultPct: true,
         exitReason: true,
+        execStatus: true,
+        execQty: true,
+        execEntryPrice: true,
+        execExitPrice: true,
+        execResultPct: true,
+        execError: true,
         // executedAt/executionOrderId omitidos para BD sem essas colunas
         // Não incluir relation strategy: evita JOIN na tabela Strategy (schema antigo na BD quebra com novas colunas)
       },

@@ -10,6 +10,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Linha única (id=1): interruptor global das ordens Bybit (página Estratégias).
+model TradingControl {
+  id             Int      @id @default(1)
+  bybitTradingOn Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+}
+
 model Strategy {
   id          String   @id @default(cuid())
   name        String   @unique // código da estratégia no registo (lib/strategies)
@@ -17,6 +24,8 @@ model Strategy {
   description String
   isActive    Boolean  @default(true)
   params      String   @default("{}") // JSON string com parâmetros
+  /// Envia ordens Bybit para os sinais desta estratégia (além do interruptor global)
+  tradingOn   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -52,6 +61,16 @@ model Signal {
   /// Resultado da posição em %, já na direção do sinal (sem custos)
   resultPct    Float?
   exitReason   String?
+  /// Execução Bybit: SKIPPED | FAILED | FILLED | PARTIAL | EXIT_FAILED | EXIT_PARTIAL | CLOSED
+  execStatus       String?
+  execQty          Float?
+  execEntryPrice   Float?
+  execExitQty      Float?
+  execExitPrice    Float?
+  execExitAttempts Int     @default(0)
+  /// Resultado real em % (preços de execução, sem taxas)
+  execResultPct    Float?
+  execError        String?
   // executedAt e executionOrderId removidos - BD sem essas colunas (adicionar depois via migration)
 
   strategy Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
@@ -61,4 +80,5 @@ model Signal {
   @@index([generatedAt])
   @@index([status])
   @@index([strategyId, symbol, status])
+  @@index([execStatus])
 }

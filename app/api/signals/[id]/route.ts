@@ -36,6 +36,12 @@ export async function GET(
         exitAt: true,
         resultPct: true,
         exitReason: true,
+        execStatus: true,
+        execQty: true,
+        execEntryPrice: true,
+        execExitPrice: true,
+        execResultPct: true,
+        execError: true,
         // executedAt/executionOrderId omitidos se BD não tiver
       },
     });

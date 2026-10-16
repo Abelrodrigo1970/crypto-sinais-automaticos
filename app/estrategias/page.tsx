@@ -10,9 +10,25 @@ interface Strategy {
   displayName: string;
   description: string;
   isActive: boolean;
+  tradingOn: boolean;
   params: string;
   timeframe: string;
   universe: { types?: string[]; minTurnover24h?: number } | null;
+}
+
+interface TradingStatus {
+  envEnabled: boolean;
+  hasCredentials: boolean;
+  testnet: boolean;
+  positionPct: number;
+  maxPositions: number;
+  leverage: number;
+  maxSlippagePct: number;
+  switchOn: boolean;
+  wallet: { totalEquity: number; totalAvailableBalance: number } | null;
+  walletError: string | null;
+  openPositions: number;
+  pendingExits: number;
 }
 
 export default function EstrategiasPage() {
@@ -21,6 +37,27 @@ export default function EstrategiasPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [trading, setTrading] = useState<TradingStatus | null>(null);
+
+  const fetchTrading = async () => {
+    try {
+      const res = await fetch('/api/trading-control');
+      if (res.ok) setTrading(await res.json());
+    } catch {
+      setTrading(null);
+    }
+  };
+
+  const toggleTrading = async (on: boolean) => {
+    const res = await fetch('/api/trading-control', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bybitTradingOn: on }),
+    });
+    setMessage(res.ok ? (on ? 'Ordens Bybit ligadas.' : 'Ordens Bybit desligadas: sem entradas novas.') : 'Erro ao mudar o interruptor Bybit.');
+    setTimeout(() => setMessage(''), 4000);
+    fetchTrading();
+  };
 
   const fetchStrategies = async () => {
     try {
@@ -44,9 +81,10 @@ export default function EstrategiasPage() {
 
   useEffect(() => {
     fetchStrategies();
+    fetchTrading();
   }, []);
 
-  const save = async (strategy: Strategy, body: { isActive?: boolean; params?: unknown }) => {
+  const save = async (strategy: Strategy, body: { isActive?: boolean; tradingOn?: boolean; params?: unknown }) => {
     try {
       setSaving(strategy.id);
       const response = await fetch('/api/strategies', {
@@ -93,6 +131,65 @@ export default function EstrategiasPage() {
           </div>
         )}
 
+        {trading && (
+          <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap justify-between items-start gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Ordens Bybit{' '}
+                  <span
+                    className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded ${
+                      trading.testnet
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                    }`}
+                  >
+                    {trading.testnet ? 'TESTNET' : 'CONTA REAL'}
+                  </span>
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {trading.positionPct}% do saldo por posição · alavancagem {trading.leverage}x · máx. {trading.maxPositions} posições ·
+                  slippage máx. {trading.maxSlippagePct}% (ordens limite IOC)
+                </p>
+                <ul className="text-sm mt-3 space-y-1">
+                  <li className={trading.envEnabled ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}>
+                    {trading.envEnabled ? '✓' : '✗'} BYBIT_TRADING_ENABLED{trading.envEnabled ? '' : ' (tem de ser true no Railway)'}
+                  </li>
+                  <li className={trading.hasCredentials ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}>
+                    {trading.hasCredentials ? '✓' : '✗'} Chaves API (BYBIT_API_KEY / BYBIT_API_SECRET)
+                  </li>
+                  {trading.wallet && (
+                    <li className="text-gray-700 dark:text-gray-300">
+                      Saldo: {trading.wallet.totalEquity.toFixed(2)} USDT · disponível {trading.wallet.totalAvailableBalance.toFixed(2)} · posição ≈{' '}
+                      {((trading.wallet.totalEquity * trading.positionPct) / 100).toFixed(2)} USDT
+                    </li>
+                  )}
+                  {trading.walletError && <li className="text-red-700 dark:text-red-400">Erro na conta: {trading.walletError}</li>}
+                  <li className="text-gray-700 dark:text-gray-300">
+                    {trading.openPositions} posições executadas abertas
+                    {trading.pendingExits > 0 && (
+                      <span className="text-red-700 dark:text-red-400"> · {trading.pendingExits} saídas por executar</span>
+                    )}
+                  </li>
+                </ul>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 max-w-2xl">
+                  Uma entrada só é enviada com o interruptor global e o da estratégia ligados. Desligar bloqueia entradas novas;
+                  as posições já abertas continuam a ser fechadas pela regra da estratégia.
+                </p>
+              </div>
+              <button
+                onClick={() => toggleTrading(!trading.switchOn)}
+                disabled={!trading.envEnabled || !trading.hasCredentials}
+                className={`px-5 py-2 rounded-lg font-semibold text-white shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  trading.switchOn ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-500 hover:bg-gray-600'
+                }`}
+              >
+                {trading.switchOn ? 'Ordens ON' : 'Ordens OFF'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-gray-600 dark:text-gray-400">A carregar estratégias...</p>
         ) : strategies.length === 0 ? (
@@ -118,6 +215,7 @@ export default function EstrategiasPage() {
                     </p>
                     <p className="text-gray-700 dark:text-gray-300 mt-2">{strategy.description}</p>
                   </div>
+                  <div className="flex flex-col gap-2 shrink-0">
                   <button
                     onClick={() => save(strategy, { isActive: !strategy.isActive })}
                     disabled={saving === strategy.id}
@@ -127,6 +225,17 @@ export default function EstrategiasPage() {
                   >
                     {strategy.isActive ? 'Ativa' : 'Inativa'}
                   </button>
+                  <button
+                    onClick={() => save(strategy, { tradingOn: !strategy.tradingOn })}
+                    disabled={saving === strategy.id}
+                    title="Enviar ordens Bybit para os sinais desta estratégia"
+                    className={`px-4 py-2 rounded-lg font-medium text-white text-sm ${
+                      strategy.tradingOn ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-500 hover:bg-gray-600'
+                    }`}
+                  >
+                    {strategy.tradingOn ? 'Bybit: ordens ON' : 'Bybit: ordens OFF'}
+                  </button>
+                  </div>
                 </div>
 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

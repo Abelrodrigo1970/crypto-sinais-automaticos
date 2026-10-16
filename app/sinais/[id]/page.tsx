@@ -20,6 +20,12 @@ interface Signal {
   exitAt?: string | null;
   resultPct?: number | null;
   exitReason?: string | null;
+  execStatus?: string | null;
+  execQty?: number | null;
+  execEntryPrice?: number | null;
+  execExitPrice?: number | null;
+  execResultPct?: number | null;
+  execError?: string | null;
   target1: number | null;
   target2: number | null;
   target3: number | null;
@@ -28,6 +34,16 @@ interface Signal {
   generatedAt: string;
   extraInfo: string | null;
 }
+
+const EXEC_LABEL: Record<string, string> = {
+  FILLED: 'posição aberta',
+  PARTIAL: 'aberta (parcial)',
+  SKIPPED: 'não enviada',
+  FAILED: 'falhou',
+  EXIT_FAILED: 'saída por executar',
+  EXIT_PARTIAL: 'saída parcial',
+  CLOSED: 'fechada',
+};
 
 export default function SignalDetailPage() {
   const params = useParams();
@@ -210,6 +226,45 @@ export default function SignalDetailPage() {
               </div>
             </div>
           </div>
+
+          {signal.execStatus && (
+            <div className="mb-8 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Execução Bybit · {EXEC_LABEL[signal.execStatus] ?? signal.execStatus}
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Quantidade</p>
+                  <p className="font-bold text-gray-900 dark:text-white">{signal.execQty ?? '–'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Entrada executada</p>
+                  <p className="font-bold text-gray-900 dark:text-white">
+                    {signal.execEntryPrice ? `$${formatPrice(signal.execEntryPrice)}` : '–'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Saída executada</p>
+                  <p className="font-bold text-gray-900 dark:text-white">
+                    {signal.execExitPrice ? `$${formatPrice(signal.execExitPrice)}` : '–'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Resultado real</p>
+                  <p
+                    className={`font-bold ${
+                      (signal.execResultPct ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {signal.execResultPct != null
+                      ? `${signal.execResultPct >= 0 ? '+' : ''}${signal.execResultPct.toFixed(2)}%`
+                      : '–'}
+                  </p>
+                </div>
+              </div>
+              {signal.execError && <p className="text-sm text-red-700 dark:text-red-400 mt-3">{signal.execError}</p>}
+            </div>
+          )}
 
           {signal.status === 'CLOSED' && (
             <div className="mb-8 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
