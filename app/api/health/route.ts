@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import fs from 'fs';
-import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,18 +17,8 @@ export async function GET() {
       NODE_ENV: process.env.NODE_ENV || 'not set',
     };
 
-    // Verificar banco de dados
-    const dbPath = process.env.DATABASE_URL?.replace('file:', '') || './data/prod.db';
-    const dbDir = path.dirname(dbPath);
-    const dbFile = path.resolve(dbPath);
-
-    health.checks.database = {
-      dbPath,
-      dbDir,
-      dbFile,
-      dirExists: fs.existsSync(dbDir) ? '✅' : '❌',
-      fileExists: fs.existsSync(dbFile) ? '✅' : '❌',
-    };
+    const isPostgreSQL = /^postgres(ql)?:\/\//.test(process.env.DATABASE_URL || '');
+    health.checks.database = { type: isPostgreSQL ? 'postgresql' : 'sqlite' };
 
     // Tentar conectar ao banco
     try {
@@ -39,19 +27,7 @@ export async function GET() {
       health.checks.database.strategies = strategyCount;
     } catch (dbError: any) {
       health.checks.database.connection = '❌ Erro de conexão';
-      health.checks.database.error = dbError.message;
       health.status = 'error';
-    }
-
-    // Verificar se o diretório data/ existe e tem permissão de escrita
-    if (!fs.existsSync(dbDir)) {
-      try {
-        fs.mkdirSync(dbDir, { recursive: true });
-        health.checks.database.dirCreated = '✅ Criado agora';
-      } catch (mkdirError: any) {
-        health.checks.database.dirCreated = `❌ Erro: ${mkdirError.message}`;
-        health.status = 'error';
-      }
     }
 
     return NextResponse.json(health, {
