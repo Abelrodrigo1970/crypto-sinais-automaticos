@@ -140,7 +140,7 @@ async function openPositionNow(sig: Signal): Promise<void> {
     await prisma.signal.update({
       where: { id: sig.id },
       data: {
-        execStatus: fill.cumExecQty < qty ? 'PARTIAL' : 'FILLED',
+        execStatus: fill.cumExecQty < qty - rules.qtyStep / 2 ? 'PARTIAL' : 'FILLED',
         execQty: fill.cumExecQty,
         execEntryPrice: fill.avgPrice,
         execError: null,
