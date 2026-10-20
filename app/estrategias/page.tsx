@@ -14,6 +14,7 @@ interface Strategy {
   params: string;
   timeframe: string;
   universe: { types?: string[]; minTurnover24h?: number } | null;
+  kind?: 'signal' | 'portfolio';
 }
 
 interface TradingStatus {
@@ -122,7 +123,7 @@ export default function EstrategiasPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Estratégias</h1>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Ações e ETFs cotados como perpétuos USDT na Bybit.
+          Ações, ETFs e cripto cotados como perpétuos USDT na Bybit.
         </p>
 
         {message && (
@@ -211,7 +212,11 @@ export default function EstrategiasPage() {
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{strategy.displayName}</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {strategy.name} • {strategy.timeframe}
-                      {strategy.universe?.types ? ` • ${strategy.universe.types.join(' + ')}` : ' • stock + ETF'}
+                      {strategy.kind === 'portfolio'
+                        ? ' • cripto (carteira long/short, tamanho nos parâmetros)'
+                        : strategy.universe?.types
+                          ? ` • ${strategy.universe.types.join(' + ')}`
+                          : ' • stock + ETF'}
                     </p>
                     <p className="text-gray-700 dark:text-gray-300 mt-2">{strategy.description}</p>
                   </div>

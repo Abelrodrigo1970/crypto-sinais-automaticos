@@ -8,7 +8,7 @@ import { prisma } from './db';
 import { fetchCandles, fetchCurrentPrice, fetchStockUniverse, type Candle, type UniverseAsset } from './marketData';
 import { fetchUnderlyingDaily, fetchYahooDaily } from './underlyingData';
 import { STRATEGIES } from './strategies';
-import type { MarketContext, StrategyDefinition } from './strategies/types';
+import { isPortfolio, type MarketContext, type StrategyDefinition } from './strategies/types';
 import { EXIT_RETRY_STATUSES, canClose, canOpen, closePosition, openPosition } from './bybitTrading';
 
 const CONCURRENCY = 4;
@@ -220,7 +220,10 @@ export async function runAllStrategies(options: RunAllStrategiesOptions = {}): P
   const load = makeLoader(new Map());
   let opened = 0;
   let market: MarketContext | undefined;
-  if (dbStrategies.some((s) => STRATEGIES.find((d) => d.name === s.name)?.needsMarket)) {
+  if (dbStrategies.some((s) => {
+    const d = STRATEGIES.find((x) => x.name === s.name);
+    return d && !isPortfolio(d) && d.needsMarket;
+  })) {
     try {
       const { candles, sessionOpen } = await fetchYahooDaily('QQQ', '1y');
       // durante a sessão a última vela ainda está em formação
@@ -235,7 +238,15 @@ export async function runAllStrategies(options: RunAllStrategiesOptions = {}): P
     const def = STRATEGIES.find((s) => s.name === dbStrategy.name);
     if (!def) continue;
     const started = Date.now();
-    const stats = await runStrategy(def, dbStrategy, load, def.needsMarket ? market : undefined);
+    let stats: RunStats;
+    try {
+      stats = isPortfolio(def)
+        ? await def.run({ strategy: dbStrategy, params: { ...def.defaultParams, ...parseParams(dbStrategy.params) } })
+        : await runStrategy(def, dbStrategy, load, def.needsMarket ? market : undefined);
+    } catch (error) {
+      console.error(`[signalEngine] ${def.name} falhou:`, error instanceof Error ? error.message : error);
+      continue;
+    }
     opened += stats.opened;
     console.log(
       `[signalEngine] ${def.name}: ${stats.opened} abertas, ${stats.closed} fechadas, ${stats.updated} atualizadas em ${((Date.now() - started) / 1000).toFixed(1)}s`

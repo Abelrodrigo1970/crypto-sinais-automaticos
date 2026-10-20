@@ -19,6 +19,7 @@ export async function GET() {
         ...r,
         timeframe: def.timeframe,
         universe: def.universe ?? null,
+        kind: 'kind' in def ? def.kind : 'signal',
         defaultParams: def.defaultParams,
       };
     });

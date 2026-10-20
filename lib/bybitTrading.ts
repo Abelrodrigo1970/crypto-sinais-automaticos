@@ -108,9 +108,17 @@ async function openPositionNow(sig: Signal): Promise<void> {
   const linkId = `${sig.id}-in`;
   try {
     const [wallet, rules] = await Promise.all([getWallet(), getInstrumentRules(sig.symbol)]);
-    const leverage = Math.min(cfg.leverage, rules.maxLeverage);
+    // Estratégias de carteira definem o tamanho e a alavancagem de cada posição no extraInfo
+    let info: { sizePct?: unknown; leverage?: unknown } = {};
+    try {
+      info = JSON.parse(sig.extraInfo || '{}');
+    } catch {
+      /* sem extraInfo */
+    }
+    const sizePct = typeof info.sizePct === 'number' && info.sizePct > 0 ? info.sizePct : cfg.positionPct;
+    const leverage = Math.min(typeof info.leverage === 'number' && info.leverage > 0 ? info.leverage : cfg.leverage, rules.maxLeverage);
     const notional = Math.min(
-      (wallet.totalEquity * cfg.positionPct) / 100,
+      (wallet.totalEquity * sizePct) / 100,
       wallet.totalAvailableBalance * leverage * 0.95
     );
     const limit = roundUp(sig.entryPrice * (1 + cfg.maxSlippagePct / 100), rules.tickSize);

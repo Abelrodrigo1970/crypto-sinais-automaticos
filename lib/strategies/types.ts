@@ -74,3 +74,28 @@ export interface StrategyDefinition<P extends Record<string, unknown> = Record<s
   /** Gestão da posição aberta no fecho da última vela: sair ou atualizar o stop */
   manage(ctx: StrategyContext<P>, position: OpenPosition): ExitDecision;
 }
+
+/**
+ * Estratégia de carteira: decide todas as posições de uma vez (ex.: ranking entre moedas com
+ * reequilíbrio periódico) em vez de entrada/saída símbolo a símbolo. O motor chama run() em cada corrida.
+ */
+export interface PortfolioStrategyDefinition<P extends Record<string, unknown> = Record<string, unknown>> {
+  kind: 'portfolio';
+  name: string;
+  displayName: string;
+  description: string;
+  timeframe: Timeframe;
+  universe?: undefined;
+  defaultParams: P;
+  run(ctx: { strategy: { id: string; displayName: string; tradingOn: boolean }; params: P }): Promise<{
+    opened: number;
+    closed: number;
+    updated: number;
+  }>;
+}
+
+export type AnyStrategyDefinition = StrategyDefinition<any> | PortfolioStrategyDefinition<any>;
+
+export function isPortfolio(def: AnyStrategyDefinition): def is PortfolioStrategyDefinition<any> {
+  return (def as PortfolioStrategyDefinition).kind === 'portfolio';
+}
