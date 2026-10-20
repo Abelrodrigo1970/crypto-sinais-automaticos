@@ -25,6 +25,9 @@ type Params = {
 
 const TF = '4h' as const;
 
+/** Força 60–100 (a API de sinais esconde < 60 por omissão): 60 + 20 × |z| */
+const strengthOf = (z: number) => Math.round(60 + Math.min(40, Math.abs(z) * 20));
+
 /**
  * Momentum de resíduos entre moedas do top 25 (backtest 2021–set/2026, scratchpad y30):
  * long nas 6 moedas com maior movimento próprio em 14 dias, short num cabaz igual de todo o top 25,
@@ -108,6 +111,7 @@ export const resMom: PortfolioStrategyDefinition<Params> = {
       const t = target.get(sig.symbol);
       if (t && t.direction === sig.direction) {
         keep.add(sig.symbol);
+        await prisma.signal.update({ where: { id: sig.id }, data: { strength: strengthOf(t.z), lastCheckedAt: new Date() } });
         continue;
       }
       const price = priceOf.get(sig.symbol) ?? sig.entryPrice;
@@ -138,7 +142,7 @@ export const resMom: PortfolioStrategyDefinition<Params> = {
           strategyId: strategy.id,
           strategyName: strategy.displayName,
           entryPrice: price,
-          strength: Math.max(0, Math.min(100, Math.round(50 + t.z * 10))),
+          strength: strengthOf(t.z),
           status: 'OPEN',
           barTime: new Date(grid),
           extraInfo: JSON.stringify({
