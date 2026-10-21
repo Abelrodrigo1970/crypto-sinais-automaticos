@@ -11,6 +11,8 @@ export interface Candle {
   low: number;
   close: number;
   volume: number;
+  /** Volume em USDT (turnover); só nas velas da Bybit */
+  turnover?: number;
   /** Abertura da vela (ms) */
   timestamp: number;
 }
@@ -111,6 +113,7 @@ export async function fetchCandles(
         low: parseFloat(c[3]),
         close: parseFloat(c[4]),
         volume: parseFloat(c[5]),
+        turnover: c[6] !== undefined ? parseFloat(c[6]) : undefined,
       });
     }
     if (rows.length < batch) break;

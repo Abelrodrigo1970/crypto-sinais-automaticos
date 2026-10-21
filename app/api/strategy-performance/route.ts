@@ -95,7 +95,14 @@ export async function GET(request: NextRequest) {
       if (s.status === 'CLOSED') res = s.resultPct;
       else {
         const p = prices.get(s.symbol);
-        if (p && s.entryPrice) res = ((p - s.entryPrice) / s.entryPrice) * 100 * sign;
+        if (p && s.entryPrice) {
+          // vendas parciais (Scanner 10): parte já realizada + resto ao preço atual
+          const fills = Array.isArray(info.fills) ? (info.fills as Array<{ frac: number; price: number }>) : null;
+          const left = typeof info.left === 'number' ? (info.left as number) : 1;
+          res = fills?.length
+            ? (fills.reduce((a, f) => a + f.frac * (f.price / s.entryPrice - 1), 0) + left * (p / s.entryPrice - 1)) * 100 * sign
+            : ((p - s.entryPrice) / s.entryPrice) * 100 * sign;
+        }
       }
       const end = s.exitAt ? s.exitAt.getTime() : now;
       const t: PerfTrade = {
