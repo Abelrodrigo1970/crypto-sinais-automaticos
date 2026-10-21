@@ -105,6 +105,14 @@ async function runStrategy(
       const price = bySymbol.get(sig.symbol)?.lastPrice ?? (await fetchCurrentPrice(sig.symbol));
       const series = await load(def, sig.symbol, price);
       if (!series || !sig.barTime) return;
+      // Como no backtest, a regra de saída só se avalia em velas posteriores à de entrada
+      // (a vela de entrada pode ainda mudar depois do fecho, ex.: leilão/ajustes do Yahoo)
+      const lastCandle = series.candles[series.candles.length - 1];
+      if (!lastCandle || lastCandle.timestamp <= sig.barTime.getTime()) {
+        await prisma.signal.update({ where: { id: sig.id }, data: { lastCheckedAt: new Date() } });
+        stats.updated++;
+        return;
+      }
       const info = JSON.parse(sig.extraInfo || '{}');
       const scale: number = info.priceScale ?? series.priceScale;
       const asset = bySymbol.get(sig.symbol) ?? ({ symbol: sig.symbol } as UniverseAsset);
