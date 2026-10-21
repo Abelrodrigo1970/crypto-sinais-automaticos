@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
+import StrategyPerformance from '@/components/StrategyPerformance';
 
 interface Signal {
   id: string;
@@ -491,19 +492,6 @@ export default function EstatisticasPage() {
     );
   }
 
-  if (!stats) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Header />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-gray-400">Nenhum dado disponível para estatísticas.</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header />
@@ -572,6 +560,10 @@ export default function EstatisticasPage() {
           </div>
         </div>
 
+        <StrategyPerformance dateFrom={dateFrom} dateTo={dateTo} />
+
+        {stats && (<>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Resultados a 24h (modelo antigo de sinais)</h2>
         {/* Painel de Simulação */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-8 border border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -941,6 +933,8 @@ export default function EstatisticasPage() {
             </>
           );
         })()}
+
+        </>)}
 
         <Disclaimer />
       </main>
