@@ -14,6 +14,8 @@ type Params = {
   maPeriod: number;
   /** Stop acima da entrada (%) */
   stopPct: number;
+  /** Fecha no toque da EMA80 (alvo da versão antiga) */
+  useEmaTarget: boolean;
   /** Fecha o que sobrar ao fim de N horas */
   holdHours: number;
   /** Universo (Scanner 2 antigo): top N perpétuos por volume 24h, com volume ≥ minTurnover24h */
@@ -63,7 +65,7 @@ export function evaluateRsiDrop(candles: Candle[], p: Params) {
 export function decideShortExit(
   bars: Candle[],
   entry: number,
-  target: number,
+  target: number | null,
   entryAt: number,
   p: Pick<Params, 'stopPct' | 'holdHours'>,
   now: number
@@ -74,7 +76,7 @@ export function decideShortExit(
   for (const b of bars) {
     if (b.timestamp < entryAt || b.timestamp + M15 > end) continue;
     if (b.high >= stopPx) return { price: Math.max(b.open, stopPx), at: b.timestamp + M15, reason: `stop +${p.stopPct}%` };
-    if (b.low <= target) return { price: Math.min(b.open, target), at: b.timestamp + M15, reason: 'alvo na EMA80' };
+    if (target !== null && b.low <= target) return { price: Math.min(b.open, target), at: b.timestamp + M15, reason: 'alvo na EMA80' };
     last = b;
   }
   if (now >= end + M15 && last) return { price: last.close, at: last.timestamp + M15, reason: `${p.holdHours}h depois da entrada` };
@@ -92,7 +94,7 @@ function parseInfo(extraInfo: string | null): Record<string, any> {
 /**
  * RSI queda de 70 + afastamento >12% à EMA80 (1h), short. Versão antiga da app (mai–out/2026): 180 sinais,
  * +2,46%/sinal a 24h com custos. Reavaliado com velas Bybit 15m (155 sinais): regras originais SL 6% + alvo EMA80,
- * fecho às 24h → +1,69%/trade; sem stop +3,2%. Funding não incluído. Só estudo: não envia ordens à Bybit.
+ * fecho às 24h → +1,69%/trade; stop 15% sem alvo, fecho às 24h → +2,8% (usado); sem stop +3,2%. Funding não incluído. Só estudo: não envia ordens à Bybit.
  */
 export const rsiDrop70: PortfolioStrategyDefinition<Params> = {
   kind: 'portfolio',
@@ -100,8 +102,8 @@ export const rsiDrop70: PortfolioStrategyDefinition<Params> = {
   displayName: 'RSI queda de 70 (mín. 4 pts) + afastamento >12% (1h)',
   description:
     'Universo como o Scanner 2 antigo: top 400 perpétuos USDT por volume, a menos de ±10% da SMA80 (1h) no último scan de 4h. Velas de 1h (vela aberta, como a app antiga). VENDA quando o RSI(14) estava ≥70 na vela anterior e cai abaixo de 70 ' +
-    'com queda de pelo menos 4 pontos, com o fecho mais de 12% acima da EMA80. Stop 6% acima da entrada, alvo na EMA80, ' +
-    'fecha 24h depois. Uma posição por moeda. Só estudo: não envia ordens à Bybit.',
+    'com queda de pelo menos 4 pontos, com o fecho mais de 12% acima da EMA80. Stop 15% acima da entrada, fecha 24h depois ' +
+    '(o alvo na EMA80 da versão antiga pode ser ligado nos parâmetros). Uma posição por moeda. Só estudo: não envia ordens à Bybit.',
   timeframe: '1h',
   defaultParams: {
     rsiPeriod: 14,
@@ -109,7 +111,8 @@ export const rsiDrop70: PortfolioStrategyDefinition<Params> = {
     minDropPoints: 4,
     minDistancePct: 12,
     maPeriod: 80,
-    stopPct: 6,
+    stopPct: 15,
+    useEmaTarget: false,
     holdHours: 24,
     universeTop: 400,
     minTurnover24h: 100_000,
@@ -132,7 +135,7 @@ export const rsiDrop70: PortfolioStrategyDefinition<Params> = {
         const info = parseInfo(sig.extraInfo);
         const entryAt = typeof info.entryAt === 'number' ? info.entryAt : sig.generatedAt.getTime();
         const bars = await fetchCandles(sig.symbol, '15m', Math.min(1000, Math.ceil((now - entryAt) / M15) + 2));
-        const ex = decideShortExit(bars, sig.entryPrice, sig.target1 ?? 0, entryAt, params, now);
+        const ex = decideShortExit(bars, sig.entryPrice, sig.target1 ?? null, entryAt, params, now);
         if (!ex) {
           await prisma.signal.update({ where: { id: sig.id }, data: { lastCheckedAt: new Date() } });
           stats.updated++;
@@ -199,7 +202,7 @@ export const rsiDrop70: PortfolioStrategyDefinition<Params> = {
           strategyName: strategy.displayName,
           entryPrice: entry,
           stopLoss: entry * (1 + params.stopPct / 100),
-          target1: h.ema,
+          target1: params.useEmaTarget ? h.ema : null,
           strength: Math.min(100, Math.max(70, Math.round(70 + Math.min(h.drop - params.minDropPoints, 8) * 2 + Math.min(Math.max(h.dist - params.minDistancePct, 0), 18)))),
           status: 'OPEN',
           barTime,
