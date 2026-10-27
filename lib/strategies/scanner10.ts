@@ -38,7 +38,7 @@ async function getJson(url: string): Promise<any> {
 }
 
 /** Perpétuos USDT cripto em negociação, com turnover 24h e preço */
-async function fetchAllPerps(): Promise<Array<{ symbol: string; turnover24h: number; lastPrice: number }>> {
+export async function fetchAllPerps(): Promise<Array<{ symbol: string; turnover24h: number; lastPrice: number }>> {
   const inst: any[] = [];
   let cursor = '';
   do {
@@ -58,7 +58,7 @@ async function fetchAllPerps(): Promise<Array<{ symbol: string; turnover24h: num
     .map((t: any) => ({ symbol: t.symbol, turnover24h: parseFloat(t.turnover24h), lastPrice: parseFloat(t.lastPrice) }));
 }
 
-async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let i = 0;
   await Promise.all(
