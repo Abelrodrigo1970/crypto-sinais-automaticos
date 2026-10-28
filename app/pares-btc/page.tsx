@@ -5,7 +5,21 @@ import Header from '@/components/Header';
 import Disclaimer from '@/components/Disclaimer';
 import type { BtcPair, BtcPairsResult } from '@/lib/btcPairs';
 
-type SortKey = 'base' | 'ratio' | 'turnover24h' | 'chgUsdt24h' | 'chg24h' | 'chg7d' | 'chg30d' | 'fromHigh30d';
+type SortKey = 'base' | 'ratio' | 'turnover24h' | 'chgUsdt24h' | 'chg24h' | 'chg7d' | 'chg30d' | 'fromHigh30d' | 'since';
+
+type Row = BtcPair & { since: number | null };
+interface SnapshotMeta {
+  id: string;
+  takenAt: string;
+  btcPrice: number;
+  count: number;
+}
+interface Snapshot extends SnapshotMeta {
+  pairs: BtcPair[];
+}
+
+const fmtWeek = (iso: string) =>
+  new Date(iso).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const COLS: Array<{ key: SortKey; label: string; title?: string }> = [
   { key: 'base', label: 'Par' },
@@ -46,6 +60,10 @@ export default function ParesBtcPage() {
   const [minVol, setMinVol] = useState(1_000_000);
   const [onlyReal, setOnlyReal] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'chg7d', dir: -1 });
+  const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
+  const [snapId, setSnapId] = useState('');
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [snapLoading, setSnapLoading] = useState(false);
 
   const load = async (refresh = false) => {
     setLoading(true);
@@ -64,12 +82,35 @@ export default function ParesBtcPage() {
 
   useEffect(() => {
     load();
+    fetch('/api/btc-pairs/history', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setSnapshots(j.snapshots ?? []))
+      .catch(() => setSnapshots([]));
   }, []);
 
-  const rows = useMemo(() => {
-    if (!data) return [];
+  useEffect(() => {
+    if (!snapId) {
+      setSnap(null);
+      return;
+    }
+    setSnapLoading(true);
+    fetch(`/api/btc-pairs/history/${snapId}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => setSnap(j.pairs ? j : null))
+      .catch(() => setSnap(null))
+      .finally(() => setSnapLoading(false));
+  }, [snapId]);
+
+  const rows = useMemo((): Row[] => {
+    const src = snapId ? snap?.pairs : data?.pairs;
+    if (!src) return [];
+    const liveRatio = new Map((data?.pairs ?? []).map((p) => [p.symbol, p.ratio]));
     const term = q.trim().toUpperCase();
-    return data.pairs
+    return src
+      .map((p) => {
+        const now = liveRatio.get(p.symbol);
+        return { ...p, since: snapId && now ? (now / p.ratio - 1) * 100 : null };
+      })
       .filter((p) => p.turnover24h >= minVol)
       .filter((p) => !term || p.base.includes(term))
       .filter((p) => !onlyReal || p.realPair.bybit || p.realPair.binance)
@@ -80,7 +121,7 @@ export default function ParesBtcPage() {
         if (y === null || y === undefined) return -1;
         return (x > y ? 1 : x < y ? -1 : 0) * sort.dir;
       });
-  }, [data, q, minVol, onlyReal, sort]);
+  }, [data, snap, snapId, q, minVol, onlyReal, sort]);
 
   const onSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === 'base' ? 1 : -1 }));
@@ -99,7 +140,39 @@ export default function ParesBtcPage() {
           restantes são sintéticos, como no TradingView.
         </p>
 
-        {data && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            Lista
+            <select
+              id="snapshot"
+              value={snapId}
+              onChange={(e) => setSnapId(e.target.value)}
+              className="px-2 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+              <option value="">Agora (ao vivo)</option>
+              {snapshots.map((s) => (
+                <option key={s.id} value={s.id}>
+                  Semana de {fmtWeek(s.takenAt)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {snapshots.length
+              ? 'Uma lista nova todas as segundas-feiras à 01:00 (hora de Lisboa), desde 1 de setembro.'
+              : 'O histórico semanal está a ser criado; volta daqui a alguns minutos.'}
+          </span>
+        </div>
+
+        {snapId && (
+          <div className="mb-4 p-3 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm">
+            {snapLoading || !snap
+              ? 'A carregar a lista…'
+              : `Lista de ${fmtWeek(snap.takenAt)} — BTC a ${snap.btcPrice.toLocaleString('pt-PT', { maximumFractionDigits: 0 })} USDT. As variações são as desse momento; "Desde a lista" mostra quanto o par ganhou ou perdeu contra o BTC desde então até agora.`}
+          </div>
+        )}
+
+        {data && !snapId && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">BTC</div>
@@ -175,7 +248,7 @@ export default function ParesBtcPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">A calcular os pares de todas as moedas (pode demorar até um minuto)…</p>
         )}
 
-        {data && (
+        {(snapId ? snap : data) && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -191,6 +264,15 @@ export default function ParesBtcPage() {
                       {sort.key === c.key ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
                     </th>
                   ))}
+                  {snapId && (
+                    <th
+                      title="Variação do rácio moeda/BTC desde a lista até agora"
+                      onClick={() => onSort('since')}
+                      className="py-2 px-3 font-medium cursor-pointer select-none whitespace-nowrap text-right"
+                    >
+                      Desde a lista{sort.key === 'since' ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
+                    </th>
+                  )}
                   <th className="py-2 px-3 font-medium">Par real</th>
                   <th className="py-2 px-3 font-medium">Gráfico</th>
                 </tr>
@@ -206,6 +288,7 @@ export default function ParesBtcPage() {
                     <td className="py-2 px-3 text-right tabular-nums">{fmtPct(p.chg7d)}</td>
                     <td className="py-2 px-3 text-right tabular-nums">{fmtPct(p.chg30d)}</td>
                     <td className="py-2 px-3 text-right tabular-nums">{fmtPct(p.fromHigh30d)}</td>
+                    {snapId && <td className="py-2 px-3 text-right tabular-nums font-medium">{fmtPct(p.since)}</td>}
                     <td className="py-2 px-3 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
                       {[p.realPair.bybit && 'Bybit', p.realPair.binance && 'Binance'].filter(Boolean).join(' · ') || '—'}
                     </td>

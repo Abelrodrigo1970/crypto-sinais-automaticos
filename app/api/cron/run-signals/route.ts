@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAllStrategies } from '@/lib/signalEngine';
 import { update24hResults, updateMissingHighLow24h } from '@/lib/update24hResults';
+import { ensureWeeklyBtcSnapshots } from '@/lib/btcPairsHistory';
 
 /**
  * Executa sinais em background (fire-and-forget).
@@ -12,6 +13,9 @@ async function runSignalsInBackground(hour: number, minute: number): Promise<voi
     const signalsCreated = await runAllStrategies();
 
     const update24h = await update24hResults();
+
+    // Lista semanal dos pares BTC (segunda-feira 01:00 de Lisboa); só trabalha quando falta uma
+    await ensureWeeklyBtcSnapshots().catch((e) => console.error('[Pares BTC] erro nas listas semanais:', e));
 
     let updateHighLow = { updated: 0, errors: 0 };
     if (hour === 8 && minute < 10) {

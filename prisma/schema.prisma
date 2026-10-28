@@ -82,3 +82,15 @@ model Signal {
   @@index([strategyId, symbol, status])
   @@index([execStatus])
 }
+
+/// Lista semanal dos pares moeda/BTC (página Pares BTC): uma por segunda-feira às 01:00 de Lisboa
+model BtcPairsSnapshot {
+  id        String   @id @default(cuid())
+  /// Momento da lista (segunda-feira 01:00 Europe/Lisbon, em UTC)
+  takenAt   DateTime @unique
+  btcPrice  Float
+  count     Int
+  /// JSON com a lista de pares (BtcPair[])
+  data      String
+  createdAt DateTime @default(now())
+}
