@@ -13,6 +13,7 @@ export default function Header() {
     { href: '/resultados', label: 'Resultados' },
     { href: '/estatisticas', label: 'Estatísticas' },
     { href: '/analise', label: 'Análise' },
+    { href: '/pares-btc', label: 'Pares BTC' },
   ];
 
   return (
