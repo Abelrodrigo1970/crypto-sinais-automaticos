@@ -2,6 +2,7 @@ import { prisma } from '../db';
 import { fetchCandles, fetchCurrentPrice, type Candle } from '../marketData';
 import { fetchAllPerps, mapLimit } from './scanner10';
 import { mondaysAt1Lisbon } from '../btcPairsHistory';
+import { btcDominanceVsEma } from '../btcDominance';
 import type { PortfolioStrategyDefinition } from './types';
 
 type Params = {
@@ -11,6 +12,8 @@ type Params = {
   basket: number;
   /** Só abre o cabaz com o fecho diário do BTC acima da EMA desta janela */
   btcEma: number;
+  /** ...e com a dominância do BTC (BTC.D) acima da sua EMA desta janela (0 = sem este filtro) */
+  btcDomEma: number;
   /** Stop de cada short, em % acima da entrada */
   stopPct: number;
   /** % do capital em cada short (o long de BTC fica com a soma dos shorts) */
@@ -101,24 +104,28 @@ export async function selectWeak(params: Params): Promise<{ picks: WeakPick[]; b
 /**
  * Short semanal às altcoins mais fracas contra o BTC (estudo de 28/10/2026, scratchpad wk/shortbt.py):
  * todas as segundas-feiras, short às 10 piores em 30 dias contra o BTC entre as 100 de maior volume, com long de BTC do
- * mesmo valor; stop 30% em cada short; tudo fecha na segunda-feira seguinte. Só com o BTC acima da EMA50 diária.
+ * mesmo valor; stop 30% em cada short; tudo fecha na segunda-feira seguinte. Só com o BTC acima da EMA50 diária e a
+ * BTC.D acima da EMA200 diária (estudo 2020–26 com dados Binance, scratchpad wk20: +1,72%/semana ativa, t 2,0; a BTC.D
+ * evitou quase todo 2021–22, quando a estratégia perdia muito).
  * Backtest 2023–out/2026 com custos e funding reais: +2,51%/semana ativa (t 3,2), 65% das semanas positivas; com o BTC
  * abaixo da EMA50 dava 0%. Só estudo: não envia ordens à Bybit.
  */
 export const shortWeak: PortfolioStrategyDefinition<Params> = {
   kind: 'portfolio',
   name: 'SHORT_FRACAS_BTC',
-  displayName: 'Short às 10 alts mais fracas vs BTC (semanal, BTC > EMA50)',
+  displayName: 'Pares com dominância BTC',
   description:
-    'Todas as segundas-feiras à 01:00 de Lisboa: se o fecho diário do BTC estiver acima da EMA50 diária, abre short às 10 moedas ' +
+    'Todas as segundas-feiras à 01:00 de Lisboa: se o fecho diário do BTC estiver acima da EMA50 diária e a dominância do BTC ' +
+    '(BTC.D, CoinMarketCap) acima da sua EMA200 diária, abre short às 10 moedas ' +
     'com pior variação de 30 dias contra o BTC entre as 100 de maior volume médio (7 dias), e long de BTC com a soma dos shorts. ' +
-    'Stop 30% em cada short. Fecha tudo na segunda-feira seguinte. Com o BTC abaixo da EMA50 não abre nada nessa semana. ' +
+    'Stop 30% em cada short. Fecha tudo na segunda-feira seguinte. Se algum dos filtros falhar, não abre nada nessa semana. ' +
     'Só estudo: não envia ordens à Bybit.',
   timeframe: '1d',
   defaultParams: {
     universeTop: 100,
     basket: 10,
     btcEma: 50,
+    btcDomEma: 200,
     stopPct: 30,
     sizePct: 5,
     minAgeDays: 60,
@@ -175,6 +182,19 @@ export const shortWeak: PortfolioStrategyDefinition<Params> = {
       console.log(`[${shortWeak.name}] semana ${label}: BTC ${btcClose.toFixed(0)} abaixo da EMA${params.btcEma} ${btcEma[btcEma.length - 1].toFixed(0)} → sem cabaz`);
       return stats;
     }
+    let dom: { dom: number; ema: number } | null = null;
+    if (params.btcDomEma > 0) {
+      try {
+        dom = await btcDominanceVsEma(params.btcDomEma);
+      } catch (error) {
+        console.error(`[${shortWeak.name}] sem BTC.D, cabaz adiado:`, error instanceof Error ? error.message : error);
+        return stats; // tenta de novo na hora seguinte (dentro da janela de 24h)
+      }
+      if (!(dom.dom > dom.ema)) {
+        console.log(`[${shortWeak.name}] semana ${label}: BTC.D ${dom.dom.toFixed(2)}% abaixo da EMA${params.btcDomEma} ${dom.ema.toFixed(2)}% → sem cabaz`);
+        return stats;
+      }
+    }
     const sel = await selectWeak(params);
 
     const entryAt = Date.now();
@@ -192,7 +212,7 @@ export const shortWeak: PortfolioStrategyDefinition<Params> = {
           entryPrice: price, stopLoss: price * (1 + params.stopPct / 100), strength: 70, status: 'OPEN', barTime,
           extraInfo: JSON.stringify({
             source: 'bybit', chg30dVsBtc: Math.round(p.chg30d * 10000) / 100, turnover7: Math.round(p.turnover7),
-            btcClose: sel.btcClose, btcEma: sel.btcEma, universo: sel.scanned, entryAt, sizePct: params.sizePct, leverage: params.leverage,
+            btcClose: sel.btcClose, btcEma: sel.btcEma, btcDom: dom?.dom, btcDomEma: dom?.ema, universo: sel.scanned, entryAt, sizePct: params.sizePct, leverage: params.leverage,
           }),
         },
       });
