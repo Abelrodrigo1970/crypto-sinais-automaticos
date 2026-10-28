@@ -104,7 +104,7 @@ export async function selectWeak(params: Params): Promise<{ picks: WeakPick[]; b
 /**
  * Short semanal às altcoins mais fracas contra o BTC (estudo de 28/10/2026, scratchpad wk/shortbt.py):
  * todas as segundas-feiras, short às 10 piores em 30 dias contra o BTC entre as 100 de maior volume, com long de BTC do
- * mesmo valor; stop 30% em cada short; tudo fecha na segunda-feira seguinte. Só com o BTC acima da EMA50 diária e a
+ * mesmo valor; stop 15% em cada short (no estudo 2020–26 o melhor: +1,71%/semana ativa, t 2,4, menos queda que 20–30%); tudo fecha na segunda-feira seguinte. Só com o BTC acima da EMA50 diária e a
  * BTC.D acima da EMA200 diária (estudo 2020–26 com dados Binance, scratchpad wk20: +1,72%/semana ativa, t 2,0; a BTC.D
  * evitou quase todo 2021–22, quando a estratégia perdia muito).
  * Backtest 2023–out/2026 com custos e funding reais: +2,51%/semana ativa (t 3,2), 65% das semanas positivas; com o BTC
@@ -118,7 +118,7 @@ export const shortWeak: PortfolioStrategyDefinition<Params> = {
     'Todas as segundas-feiras à 01:00 de Lisboa: se o fecho diário do BTC estiver acima da EMA50 diária e a dominância do BTC ' +
     '(BTC.D, CoinMarketCap) acima da sua EMA200 diária, abre short às 10 moedas ' +
     'com pior variação de 30 dias contra o BTC entre as 100 de maior volume médio (7 dias), e long de BTC com a soma dos shorts. ' +
-    'Stop 30% em cada short. Fecha tudo na segunda-feira seguinte. Se algum dos filtros falhar, não abre nada nessa semana. ' +
+    'Stop 15% em cada short. Fecha tudo na segunda-feira seguinte. Se algum dos filtros falhar, não abre nada nessa semana. ' +
     'Só estudo: não envia ordens à Bybit.',
   timeframe: '1d',
   defaultParams: {
@@ -126,7 +126,7 @@ export const shortWeak: PortfolioStrategyDefinition<Params> = {
     basket: 10,
     btcEma: 50,
     btcDomEma: 200,
-    stopPct: 30,
+    stopPct: 15,
     sizePct: 5,
     minAgeDays: 60,
     leverage: 1,
