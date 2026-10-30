@@ -21,6 +21,7 @@ interface TradingStatus {
   envEnabled: boolean;
   hasCredentials: boolean;
   testnet: boolean;
+  positionUsdt: number;
   positionPct: number;
   maxPositions: number;
   leverage: number;
@@ -149,7 +150,10 @@ export default function EstrategiasPage() {
                   </span>
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {trading.positionPct}% do saldo por posição · alavancagem {trading.leverage}x · máx. {trading.maxPositions} posições ·
+                  {trading.positionUsdt > 0
+                    ? `${trading.positionUsdt} USDT por posição (margem ${(trading.positionUsdt / trading.leverage).toFixed(2)} USDT)`
+                    : `${trading.positionPct}% do saldo por posição`}{' '}
+                  · alavancagem {trading.leverage}x · máx. {trading.maxPositions} posições ·
                   slippage máx. {trading.maxSlippagePct}% (ordens limite IOC)
                 </p>
                 <ul className="text-sm mt-3 space-y-1">
@@ -162,7 +166,7 @@ export default function EstrategiasPage() {
                   {trading.wallet && (
                     <li className="text-gray-700 dark:text-gray-300">
                       Saldo: {trading.wallet.totalEquity.toFixed(2)} USDT · disponível {trading.wallet.totalAvailableBalance.toFixed(2)} · posição ≈{' '}
-                      {((trading.wallet.totalEquity * trading.positionPct) / 100).toFixed(2)} USDT
+                      {(trading.positionUsdt > 0 ? trading.positionUsdt : (trading.wallet.totalEquity * trading.positionPct) / 100).toFixed(2)} USDT
                     </li>
                   )}
                   {trading.walletError && <li className="text-red-700 dark:text-red-400">Erro na conta: {trading.walletError}</li>}

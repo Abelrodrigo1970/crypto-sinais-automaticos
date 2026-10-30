@@ -25,9 +25,11 @@ export function tradingConfig() {
     envEnabled: process.env.BYBIT_TRADING_ENABLED === 'true',
     hasCredentials: hasCredentials(),
     testnet: isTestnet(),
+    /** Tamanho fixo de cada posição em USDT (valor da posição, não a margem); 0 = usar % do saldo */
+    positionUsdt: num(process.env.BYBIT_POSITION_USDT, 80),
     positionPct: num(process.env.BYBIT_POSITION_PCT, 2),
     maxPositions: num(process.env.BYBIT_MAX_POSITIONS, 50),
-    leverage: num(process.env.BYBIT_LEVERAGE, 1),
+    leverage: num(process.env.BYBIT_LEVERAGE, 5),
     maxSlippagePct: num(process.env.BYBIT_MAX_SLIPPAGE_PCT, 0.5),
   };
 }
@@ -108,17 +110,20 @@ async function openPositionNow(sig: Signal): Promise<void> {
   const linkId = `${sig.id}-in`;
   try {
     const [wallet, rules] = await Promise.all([getWallet(), getInstrumentRules(sig.symbol)]);
-    // Estratégias de carteira definem o tamanho e a alavancagem de cada posição no extraInfo
+    // Tamanho fixo (BYBIT_POSITION_USDT, por omissão 80 USDT a 5x = 16 USDT de margem) igual para todas as estratégias.
+    // Com BYBIT_POSITION_USDT=0 volta ao tamanho em % do saldo (sizePct/leverage do extraInfo nas estratégias de carteira).
     let info: { sizePct?: unknown; leverage?: unknown } = {};
     try {
       info = JSON.parse(sig.extraInfo || '{}');
     } catch {
       /* sem extraInfo */
     }
+    const fixed = cfg.positionUsdt > 0;
     const sizePct = typeof info.sizePct === 'number' && info.sizePct > 0 ? info.sizePct : cfg.positionPct;
-    const leverage = Math.min(typeof info.leverage === 'number' && info.leverage > 0 ? info.leverage : cfg.leverage, rules.maxLeverage);
+    const wanted = fixed ? cfg.leverage : typeof info.leverage === 'number' && info.leverage > 0 ? info.leverage : cfg.leverage;
+    const leverage = Math.min(wanted, rules.maxLeverage);
     const notional = Math.min(
-      (wallet.totalEquity * sizePct) / 100,
+      fixed ? cfg.positionUsdt : (wallet.totalEquity * sizePct) / 100,
       wallet.totalAvailableBalance * leverage * 0.95
     );
     const limit = roundUp(sig.entryPrice * (1 + cfg.maxSlippagePct / 100), rules.tickSize);
